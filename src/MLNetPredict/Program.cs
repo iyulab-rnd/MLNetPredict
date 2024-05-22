@@ -72,6 +72,11 @@ namespace MLNetPredict
                     var predictionResult = ForecastingHandler.Predict(assembly, inputPath, className, hasHeader, delimiter);
                     ForecastingHandler.SaveResultsForForecasting(predictionResult, outputFile);
                 }
+                else if (configInfo.Scenario == "Regression")
+                {
+                    var predictionResult = RegressionHandler.Predict(assembly, inputPath, className, hasHeader, delimiter);
+                    RegressionHandler.SaveResultsForRegression(predictionResult, outputFile);
+                }
                 else
                 {
                     throw new NotSupportedException($"Scenario {configInfo.Scenario} is not supported.");
