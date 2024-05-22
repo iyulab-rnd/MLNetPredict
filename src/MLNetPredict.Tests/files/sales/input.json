@@ -1,0 +1,8 @@
+{
+  "horizon": 14,
+  "input": {
+    "store": 1,
+    "item": 1,
+    "sales": 20
+  }
+}

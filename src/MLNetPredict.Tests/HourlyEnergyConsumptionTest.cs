@@ -18,13 +18,12 @@ namespace MLNetPredict.Tests
         [Fact]
         public void TestPredictionToFileOutput()
         {
-            var inputPath = Path.Combine(projPath, "files/hourly_energy_consumption/input.csv");
+            var inputPath = Path.Combine(projPath, "files/hourly_energy_consumption/input.json");
             // Arrange
             var args = new[]
             {
                 modelPath,
-                inputPath,
-                "--has-header", "false",
+                inputPath
             };
 
             var outputPath = Path.GetDirectoryName(inputPath)!;
