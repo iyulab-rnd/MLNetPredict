@@ -3,9 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MLNetPredict", "MLNetPredict\MLNetPredict.csproj", "{A42798B8-7345-4A7F-A704-62CC2BBD519E}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MLNetPredict", "MLNetPredict\MLNetPredict.csproj", "{A42798B8-7345-4A7F-A704-62CC2BBD519E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MLNetPredict.Tests", "MLNetPredict.Tests\MLNetPredict.Tests.csproj", "{C47DB318-72C6-434F-A71A-ECC1736505BE}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MLNetPredict.Tests", "MLNetPredict.Tests\MLNetPredict.Tests.csproj", "{C47DB318-72C6-434F-A71A-ECC1736505BE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FilePreprocess", "MLNetFilePreprocess\FilePreprocess.csproj", "{97E9F57A-2980-42C1-A833-50B87B351ADD}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,8 +23,15 @@ Global
 		{C47DB318-72C6-434F-A71A-ECC1736505BE}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C47DB318-72C6-434F-A71A-ECC1736505BE}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C47DB318-72C6-434F-A71A-ECC1736505BE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{97E9F57A-2980-42C1-A833-50B87B351ADD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{97E9F57A-2980-42C1-A833-50B87B351ADD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{97E9F57A-2980-42C1-A833-50B87B351ADD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{97E9F57A-2980-42C1-A833-50B87B351ADD}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {35BB5D06-9CB7-489F-BF9C-6CC217C44E49}
 	EndGlobalSection
 EndGlobal
