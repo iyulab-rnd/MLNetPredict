@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MLNetPredict", "MLNetPredict\MLNetPredict.csproj", "{A42798B8-7345-4A7F-A704-62CC2BBD519E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MLNetPredict.Tests", "MLNetPredict.Tests\MLNetPredict.Tests.csproj", "{C47DB318-72C6-434F-A71A-ECC1736505BE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A42798B8-7345-4A7F-A704-62CC2BBD519E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A42798B8-7345-4A7F-A704-62CC2BBD519E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A42798B8-7345-4A7F-A704-62CC2BBD519E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A42798B8-7345-4A7F-A704-62CC2BBD519E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C47DB318-72C6-434F-A71A-ECC1736505BE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C47DB318-72C6-434F-A71A-ECC1736505BE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C47DB318-72C6-434F-A71A-ECC1736505BE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C47DB318-72C6-434F-A71A-ECC1736505BE}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
