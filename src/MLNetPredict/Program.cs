@@ -1,5 +1,4 @@
 ﻿using CommandLine;
-using System.Reflection;
 
 namespace MLNetPredict
 {
@@ -81,6 +80,11 @@ namespace MLNetPredict
                 {
                     var predictionResult = RecommendationHandler.Predict(assembly, inputPath, className, hasHeader, delimiter);
                     RecommendationHandler.SaveResultsForRecommendation(predictionResult, outputFile);
+                }
+                else if (configInfo.Scenario == "TextClassification")
+                {
+                    var predictionResult = TextClassificationHandler.Predict(assembly, inputPath, className, hasHeader, delimiter);
+                    TextClassificationHandler.SaveResultsForClassification(predictionResult, outputFile);
                 }
                 else
                 {

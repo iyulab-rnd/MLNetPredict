@@ -12,7 +12,7 @@ namespace MLNetPredict.Tests
             modelPath = Path.Combine(projPath, "models/MovieRecommendation");
 
             // # pre requsites
-            // mlnet classification --dataset "files/github-issue/issues.tsv" --label-col "Area" --train-time 120 --output "models" --name "GithubIssues" --log-file-path "./models/GithubIssues/logs.txt"
+            // mlnet recommendation --dataset "files/movie-recommendation/data.csv" --user-col userId --item-col movieId --rating-col rating --has-header true --name MovieRecommendation --train-time 120 --output "models" --log-file-path "./models/MovieRecommendation/logs.txt"
         }
 
         [Fact]

@@ -83,6 +83,11 @@ namespace MLNetPredict
 
                 // Time Series
                 typeof(Microsoft.ML.Transforms.TimeSeries.SsaForecastingTransformer).Assembly.Location,
+
+                // Time Series
+                typeof(Microsoft.ML.Transforms.TimeSeries.SsaForecastingTransformer).Assembly.Location,
+
+                typeof(Microsoft.ML.TorchSharp.NasBert.TextClassificationTrainer).Assembly.Location
             };
 
             foreach (var assemblyPath in mlNetAssemblies)

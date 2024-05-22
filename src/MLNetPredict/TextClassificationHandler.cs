@@ -2,15 +2,16 @@
 
 namespace MLNetPredict
 {
-    public class ClassificationPredictionResult(string[] headers, string[] classes, (object input, IOrderedEnumerable<KeyValuePair<string, float>> predictions)[] items)
+    public class TextClassificationPredictionResult(string[] headers, string[] classes, (object input, IOrderedEnumerable<KeyValuePair<string, float>> predictions)[] items)
     {
         public string[] Headers { get; set; } = headers;
         public string[] Classes { get; set; } = classes;
         public (object Input, IOrderedEnumerable<KeyValuePair<string, float>> Predictions)[] Items { get; set; } = items;
     }
-    public static class ClassificationHandler
+
+    public static class TextClassificationHandler
     {
-        public static ClassificationPredictionResult Predict(Assembly assembly, string inputPath, string className, bool hasHeader, string delimiter)
+        public static TextClassificationPredictionResult Predict(Assembly assembly, string inputPath, string className, bool hasHeader, string delimiter)
         {
             var targetType = assembly.GetTypes().FirstOrDefault(t => t.Name == className)
                 ?? throw new InvalidOperationException($"{className} class not found.");
@@ -76,10 +77,10 @@ namespace MLNetPredict
                 }
             }
 
-            return new ClassificationPredictionResult(headers, classes.ToArray(), items);
+            return new TextClassificationPredictionResult(headers, classes.ToArray(), items);
         }
 
-        public static void SaveResultsForClassification(ClassificationPredictionResult result, string outputPath)
+        public static void SaveResultsForClassification(TextClassificationPredictionResult result, string outputPath)
         {
             using var writer = new StreamWriter(outputPath);
 
@@ -90,8 +91,9 @@ namespace MLNetPredict
 
                 foreach (var (_, Predictions) in result.Items)
                 {
-                    var prediction = Predictions.FirstOrDefault();
-                    writer.WriteLine($"{prediction.Key},{Utils.FormatValue(prediction.Value)}");
+                    var first = Predictions.First();
+                    var line = $"{first.Key},{Utils.FormatValue(first.Value)}";
+                    writer.WriteLine(line);
                 }
             }
             else
