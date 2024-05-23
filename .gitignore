@@ -366,4 +366,5 @@ FodyWeavers.xsd
 
 src/MLNetPredict.Tests/models/
 src/MLNetPredict.Tests/files/ConcreteCrack/**
+src/MLNetPredict.Tests/files/helmet_detection/**
 /scripts/nuget-publish.ps1

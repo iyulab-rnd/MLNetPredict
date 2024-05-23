@@ -2,25 +2,25 @@ using Microsoft.ML;
 
 namespace MLNetPredict.Tests
 {
-    public class ConcreteCrackTest
+    public class HelmetDetectionTest
     {
         private readonly string projPath;
         private readonly string modelPath;
 
-        public ConcreteCrackTest()
+        public HelmetDetectionTest()
         {
             var currentPath = AppDomain.CurrentDomain.BaseDirectory;
             this.projPath = currentPath.Substring(0, currentPath.IndexOf("bin"));
-            modelPath = Path.Combine(projPath, "models/ConcreteCrack_D");
+            modelPath = Path.Combine(projPath, "models/HelmetDetection");
 
             // # pre requsites
-            // mlnet image-classification --dataset "files/ConcreteCrack/D" --name "ConcreteCrack_D" --output "models" --log-file-path "./models/ConcreteCrack_D/logs.txt"
+            // mlnet object-detection --dataset "files/helmet_detection/train/_annotations.coco.json" --validation-dataset "files/helmet_detection/valid/_annotations.coco.json" --name "HelmetDetection" --output "models" --log-file-path "./models/HelmetDetection/logs.txt"
         }
 
         [Fact]
         public void TestPredictionToFileOutput()
         {
-            var inputPath = Path.Combine(projPath, "files/ConcreteCrack/D_test");
+            var inputPath = Path.Combine(projPath, "files/helmet_detection/input");
             // Arrange
             var args = new[]
             {

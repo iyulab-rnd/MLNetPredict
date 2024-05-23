@@ -1,9 +1,12 @@
 ﻿using System.Reflection;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using ICSharpCode.SharpZipLib.Tar;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.ML.Data;
+using Microsoft.ML.TorchSharp.AutoFormerV2;
 using Newtonsoft.Json.Linq;
 using NuGet.Common;
 using NuGet.Configuration;
@@ -55,9 +58,9 @@ namespace MLNetPredict
             return classDeclaration?.Identifier.Text!;
         }
 
-        public static Assembly CompileAssembly(string[] sourceCodes, string scenario)
+        public static Assembly CompileAssembly(string code, string scenario)
         {
-            var syntaxTrees = sourceCodes.Select(code => CSharpSyntaxTree.ParseText(code)).ToArray();
+            var syntaxTrees = new SyntaxTree[] { CSharpSyntaxTree.ParseText(code) };
             var references = AppDomain.CurrentDomain.GetAssemblies()
                 .Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location))
                 .Select(a => MetadataReference.CreateFromFile(a.Location))
@@ -66,16 +69,7 @@ namespace MLNetPredict
 
             string[] mlNetAssemblies;
 
-            if (scenario == "ImageClassification")
-            {
-                mlNetAssemblies =
-                [
-                    typeof(Microsoft.ML.MLContext).Assembly.Location,
-                    typeof(Microsoft.ML.IDataView).Assembly.Location,
-                    typeof(Microsoft.ML.Vision.ImageClassificationTrainer).Assembly.Location,
-                ];
-            }
-            else if (scenario == "Classification")
+            if (scenario == "Classification")
             {
                 mlNetAssemblies =
                 [
@@ -120,6 +114,26 @@ namespace MLNetPredict
                     typeof(Microsoft.ML.MLContext).Assembly.Location,
                     typeof(Microsoft.ML.IDataView).Assembly.Location,
                     typeof(Microsoft.ML.TorchSharp.NasBert.TextClassificationTrainer).Assembly.Location,
+                ];
+            }
+            else if (scenario == "ImageClassification")
+            {
+                mlNetAssemblies =
+                [
+                    typeof(Microsoft.ML.MLContext).Assembly.Location,
+                    typeof(Microsoft.ML.IDataView).Assembly.Location,
+                    typeof(Microsoft.ML.Vision.ImageClassificationTrainer).Assembly.Location,
+                ];
+            }
+            else if (scenario == "ObjectDetection")
+            {
+                mlNetAssemblies =
+                [
+                    typeof(Microsoft.ML.MLContext).Assembly.Location,
+                    typeof(Microsoft.ML.IDataView).Assembly.Location,
+                    typeof(ObjectDetectionTrainer).Assembly.Location,
+                    typeof(MLImage).Assembly.Location,
+                    typeof(JsonNode).Assembly.Location,
                 ];
             }
             else
@@ -208,19 +222,9 @@ namespace MLNetPredict
         private static partial Regex PropertyNameRegex();
 
 
-        public static void InstallTensorFlowRedist()
+        private static void InstallNugetPackage(string packageId, string packageVersion, string libFolder)
         {
-            string packageId = "SciSharp.TensorFlow.Redist";
-            string packageVersion = "2.3.1";
             string packagesPath = Path.Combine(Path.GetTempPath(), "nuget-packages");
-            var outputLibFolder = Path.Combine(AppContext.BaseDirectory, "runtimes", "win-x64", "native");
-            var tensorflowDllPath = Path.Combine(outputLibFolder, "tensorflow.dll");
-
-            // Check if the TensorFlow native library is already installed
-            if (File.Exists(tensorflowDllPath))
-            {
-                return;
-            }
 
             var cache = new SourceCacheContext();
             var settings = Settings.LoadDefaultSettings(root: null); // Load default settings
@@ -270,17 +274,32 @@ namespace MLNetPredict
                     ).Result;
                 }
 
-                ConsoleLogger.Current.LogInformation("Copying TensorFlow native library to output directory...");
+                ConsoleLogger.Current.LogInformation($"Copying {packageId} native library to output directory...");
                 // Copy the TensorFlow native library to the output directory
-                var nativeLibFolder = Path.Combine(packagesPath, $"{packageId}.{packageVersion}", "runtimes");
+                var nativeLibFolder = Path.Combine(packagesPath, $"{packageId}.{packageVersion}", libFolder);
+                var outputLibFolder = Path.Combine(AppContext.BaseDirectory);
                 CopyDirectory(nativeLibFolder, outputLibFolder);
 
-                ConsoleLogger.Current.LogInformation("TensorFlow native library installation completed.");
+                ConsoleLogger.Current.LogInformation("native library installation completed.");
             }
             else
             {
                 throw new Exception($"Failed to download {packageId} {packageVersion}.");
             }
+        }
+
+        public static void InstallTensorFlowRedist()
+        {
+            string packageId = "SciSharp.TensorFlow.Redist";
+            string packageVersion = "2.3.1";
+            
+            var skipCheckFile = Path.Combine(AppContext.BaseDirectory, "runtimes", "win-x64", "native", "tensorflow.dll");
+            if (File.Exists(skipCheckFile))
+            {
+                return;
+            }
+
+            InstallNugetPackage(packageId, packageVersion, "runtimes");
         }
 
         private static void CopyDirectory(string sourceDir, string destinationDir)
@@ -298,6 +317,47 @@ namespace MLNetPredict
                 var destDir = Path.Combine(destinationDir, Path.GetFileName(directory));
                 CopyDirectory(directory, destDir);
             }
+        }
+
+        internal static string CombinePartialClassCodes(params string[] codes)
+        {
+            var trees = codes.Select(code => CSharpSyntaxTree.ParseText(code)).ToList();
+            var rootNodes = trees.Select(tree => tree.GetCompilationUnitRoot()).ToList();
+
+            // Collect and merge using directives
+            var usings = new SortedSet<string>();
+            foreach (var root in rootNodes)
+            {
+                foreach (var usingDirective in root.Usings)
+                {
+                    usings.Add(usingDirective.ToFullString());
+                }
+            }
+
+            // Collect class declarations
+            var classMembers = new List<MemberDeclarationSyntax>();
+            foreach (var root in rootNodes)
+            {
+                foreach (var member in root.Members)
+                {
+                    if (member is NamespaceDeclarationSyntax namespaceDeclaration)
+                    {
+                        classMembers.AddRange(namespaceDeclaration.Members);
+                    }
+                    else
+                    {
+                        classMembers.Add(member);
+                    }
+                }
+            }
+
+            // Create new compilation unit
+            var newRoot = SyntaxFactory.CompilationUnit()
+                .WithUsings(SyntaxFactory.List(usings.Select(u => SyntaxFactory.ParseCompilationUnit(u).Usings[0])))
+                .WithMembers(SyntaxFactory.List(classMembers))
+                .NormalizeWhitespace();
+
+            return newRoot.ToFullString();
         }
     }
 }

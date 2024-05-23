@@ -1,5 +1,6 @@
 ﻿using CommandLine;
 using Microsoft.ML;
+using System.Reflection;
 
 namespace MLNetPredict
 {
@@ -85,15 +86,31 @@ namespace MLNetPredict
                 Console.WriteLine($"Using model: {modelPath}");
                 Console.WriteLine($"Output will be saved to: {outputFile}");
 
+                Assembly assembly;
+                string code;
                 if (configInfo.Scenario == "ImageClassification")
                 {
                     Utils.InstallTensorFlowRedist();
+
+                    code = File.ReadAllText(consumptionPath);
+                    assembly = Utils.CompileAssembly(code, configInfo.Scenario);
+                }
+                else if (configInfo.Scenario == "ObjectDetection")
+                {   
+                    var trainPath = Directory.GetFiles(modelDir, "*.training.cs").First();
+                    var consumptionCode = File.ReadAllText(consumptionPath);
+                    var trainCode = File.ReadAllText(trainPath);
+
+                    code = Utils.CombinePartialClassCodes(consumptionCode, trainCode);
+                    assembly = Utils.CompileAssembly(code, configInfo.Scenario);
+                }
+                else
+                {
+                    code = File.ReadAllText(consumptionPath);
+                    assembly = Utils.CompileAssembly(code, configInfo.Scenario);
                 }
 
-                var consumptionCode = File.ReadAllText(consumptionPath);
-                var assembly = Utils.CompileAssembly([consumptionCode], configInfo.Scenario);
-
-                var className = Utils.GetClassName(consumptionCode);
+                var className = Utils.GetClassName(code);
                 if (className == null)
                 {
                     Console.WriteLine("Class name could not be found in the provided code.");
@@ -102,12 +119,8 @@ namespace MLNetPredict
 
                 ModelHandler.SetModelPath(assembly, modelPath, className);
 
-                if (configInfo.Scenario == "ImageClassification")
-                {
-                    var predictionResult = ImageClassificationHandler.Predict(assembly, inputPath, className);
-                    ImageClassificationHandler.SaveResults(predictionResult, outputFile);
-                }
-                else if (configInfo.Scenario == "Classification")
+                
+                if (configInfo.Scenario == "Classification")
                 {
                     var predictionResult = ClassificationHandler.Predict(assembly, inputPath, className, hasHeader, delimiter);
                     ClassificationHandler.SaveResults(predictionResult, outputFile);
@@ -131,6 +144,16 @@ namespace MLNetPredict
                 {
                     var predictionResult = TextClassificationHandler.Predict(assembly, inputPath, className, hasHeader, delimiter);
                     TextClassificationHandler.SaveResults(predictionResult, outputFile);
+                }
+                else if (configInfo.Scenario == "ImageClassification")
+                {
+                    var predictionResult = ImageClassificationHandler.Predict(assembly, inputPath, className);
+                    ImageClassificationHandler.SaveResults(predictionResult, outputFile);
+                }
+                else if (configInfo.Scenario == "ObjectDetection")
+                {
+                    var predictionResult = ObjectDetectionHandler.Predict(assembly, inputPath, className);
+                    ObjectDetectionHandler.SaveResults(predictionResult, outputFile);
                 }
                 else
                 {
