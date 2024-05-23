@@ -66,7 +66,7 @@ namespace MLNetPredict
             return new RegressionPredictionResult(items);
         }
 
-        public static void SaveResultsForRegression(RegressionPredictionResult result, string outputPath)
+        public static void SaveResults(RegressionPredictionResult result, string outputPath)
         {
             using var writer = new StreamWriter(outputPath);
             writer.WriteLine("Score");

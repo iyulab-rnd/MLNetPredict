@@ -61,7 +61,7 @@ namespace MLNetPredict
             return new ForecastingPredictionResult(output);
         }
 
-        public static void SaveResultsForForecasting(ForecastingPredictionResult result, string outputPath)
+        public static void SaveResults(ForecastingPredictionResult result, string outputPath)
         {
             var outputType = result.Output.GetType();
             var propertyNames = outputType.GetProperties().Select(p => p.Name).ToArray();

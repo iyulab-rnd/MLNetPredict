@@ -365,3 +365,4 @@ FodyWeavers.xsd
 **/files/**/*-predicted.*
 
 src/MLNetPredict.Tests/models/
+src/MLNetPredict.Tests/files/ConcreteCrack/**

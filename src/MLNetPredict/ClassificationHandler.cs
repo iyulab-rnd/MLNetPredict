@@ -79,7 +79,7 @@ namespace MLNetPredict
             return new ClassificationPredictionResult(headers, classes.ToArray(), items);
         }
 
-        public static void SaveResultsForClassification(ClassificationPredictionResult result, string outputPath)
+        public static void SaveResults(ClassificationPredictionResult result, string outputPath)
         {
             using var writer = new StreamWriter(outputPath);
 

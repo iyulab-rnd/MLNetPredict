@@ -1,4 +1,5 @@
 ﻿using CommandLine;
+using Microsoft.ML;
 
 namespace MLNetPredict
 {
@@ -24,6 +25,10 @@ namespace MLNetPredict
 
         public static int Main(string[] args)
         {
+            var mlContext = new MLContext();
+            Console.WriteLine("[ML.NET Prediction Engine]");
+
+            //args = [@"D:\data\MLNetPredict\src\MLNetPredict.Tests\models\ConcreteCrack_D", @"D:\data\MLNetPredict\src\MLNetPredict.Tests\files\ConcreteCrack\D_test"];
             return CommandLine.Parser.Default.ParseArguments<Options>(args)
                 .MapResult(
                     (Options opts) => RunPrediction(opts),
@@ -36,14 +41,53 @@ namespace MLNetPredict
             {
                 var modelDir = opts.ModelPath;
                 var inputPath = opts.InputPath;
-                var outputPath = opts.OutputPath ?? Path.GetDirectoryName(inputPath)!;
+                var outputPath = opts.OutputPath ?? (Directory.Exists(inputPath) ? inputPath : Path.GetDirectoryName(inputPath)!);
 
-                var modelPath = Directory.GetFiles(modelDir, "*.mlnet").First();
-                var consumptionPath = Directory.GetFiles(modelDir, "*.consumption.cs").First();
-                var mbconfigPath = Directory.GetFiles(modelDir, "*.mbconfig").First();
+                if (!Directory.Exists(modelDir))
+                {
+                    Console.WriteLine($"Model directory '{modelDir}' does not exist.");
+                    return 1;
+                }
+
+                var modelFiles = Directory.GetFiles(modelDir, "*.mlnet");
+                if (modelFiles.Length == 0)
+                {
+                    Console.WriteLine("No .mlnet model file found. Ensure you have created a model using the latest version of mlnet-cli.");
+                    return 1;
+                }
+
+                var modelPath = modelFiles.First();
+
+                var consumptionFiles = Directory.GetFiles(modelDir, "*.consumption.cs");
+                if (consumptionFiles.Length == 0)
+                {
+                    Console.WriteLine("No .consumption.cs file found. Ensure you have created a model using the latest version of mlnet-cli.");
+                    return 1;
+                }
+
+                var consumptionPath = consumptionFiles.First();
+
+                var mbconfigFiles = Directory.GetFiles(modelDir, "*.mbconfig");
+                if (mbconfigFiles.Length == 0)
+                {
+                    Console.WriteLine("No .mbconfig file found. Ensure you have created a model using the latest version of mlnet-cli.");
+                    return 1;
+                }
+
+                var mbconfigPath = mbconfigFiles.First();
+                var configInfo = Utils.GetConfigInfo(mbconfigPath);
+                var hasHeader = opts.HasHeader ?? configInfo.HasHeader;
+                var delimiter = opts.Separator ?? Utils.GetDelimiterFromExtension(inputPath) ?? configInfo.Delimiter;
+
+                var inputFileName = Path.GetFileNameWithoutExtension(inputPath);
+                var outputFile = Path.Combine(outputPath, $"{inputFileName}-predicted.csv");
+
+                Console.WriteLine($"Processing input file: {inputPath}");
+                Console.WriteLine($"Using model: {modelPath}");
+                Console.WriteLine($"Output will be saved to: {outputFile}");
 
                 var consumptionCode = File.ReadAllText(consumptionPath);
-                var assembly = Utils.CompileAssembly(new[] { consumptionCode });
+                var assembly = Utils.CompileAssembly([consumptionCode], configInfo.Scenario);
 
                 var className = Utils.GetClassName(consumptionCode);
                 if (className == null)
@@ -54,48 +98,48 @@ namespace MLNetPredict
 
                 ModelHandler.SetModelPath(assembly, modelPath, className);
 
-                var configInfo = Utils.GetConfigInfo(mbconfigPath);
-                var hasHeader = opts.HasHeader ?? configInfo.HasHeader;
-                var delimiter = opts.Separator ?? Utils.GetDelimiterFromExtension(inputPath) ?? configInfo.Delimiter;
-
-                var inputFileName = Path.GetFileNameWithoutExtension(inputPath);
-                var outputFile = Path.Combine(outputPath, $"{inputFileName}-predicted.csv");
-
-                if (configInfo.Scenario == "Classification")
+                if (configInfo.Scenario == "ImageClassification")
+                {
+                    var predictionResult = ImageClassificationHandler.Predict(assembly, inputPath, className);
+                    ImageClassificationHandler.SaveResults(predictionResult, outputFile);
+                }
+                else if (configInfo.Scenario == "Classification")
                 {
                     var predictionResult = ClassificationHandler.Predict(assembly, inputPath, className, hasHeader, delimiter);
-                    ClassificationHandler.SaveResultsForClassification(predictionResult, outputFile);
+                    ClassificationHandler.SaveResults(predictionResult, outputFile);
                 }
                 else if (configInfo.Scenario == "Forecasting")
                 {
                     var predictionResult = ForecastingHandler.Predict(assembly, inputPath, className, hasHeader, delimiter);
-                    ForecastingHandler.SaveResultsForForecasting(predictionResult, outputFile);
+                    ForecastingHandler.SaveResults(predictionResult, outputFile);
                 }
                 else if (configInfo.Scenario == "Regression")
                 {
                     var predictionResult = RegressionHandler.Predict(assembly, inputPath, className, hasHeader, delimiter);
-                    RegressionHandler.SaveResultsForRegression(predictionResult, outputFile);
+                    RegressionHandler.SaveResults(predictionResult, outputFile);
                 }
                 else if (configInfo.Scenario == "Recommendation")
                 {
                     var predictionResult = RecommendationHandler.Predict(assembly, inputPath, className, hasHeader, delimiter);
-                    RecommendationHandler.SaveResultsForRecommendation(predictionResult, outputFile);
+                    RecommendationHandler.SaveResults(predictionResult, outputFile);
                 }
                 else if (configInfo.Scenario == "TextClassification")
                 {
                     var predictionResult = TextClassificationHandler.Predict(assembly, inputPath, className, hasHeader, delimiter);
-                    TextClassificationHandler.SaveResultsForClassification(predictionResult, outputFile);
+                    TextClassificationHandler.SaveResults(predictionResult, outputFile);
                 }
                 else
                 {
-                    throw new NotSupportedException($"Scenario {configInfo.Scenario} is not supported.");
+                    Console.WriteLine($"Scenario {configInfo.Scenario} is not supported.");
+                    return 1;
                 }
 
+                Console.WriteLine("Prediction completed successfully.");
                 return 0;
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine(ex.Message);
+                Console.Error.WriteLine($"Error: {ex.Message}");
                 return 1;
             }
         }

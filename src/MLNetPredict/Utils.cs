@@ -1,10 +1,11 @@
 ﻿using System.Reflection;
-using System.Reflection.PortableExecutable;
 using System.Text.RegularExpressions;
+using ICSharpCode.SharpZipLib.Tar;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Newtonsoft.Json.Linq;
+using Tensorflow;
 
 namespace MLNetPredict
 {
@@ -46,7 +47,7 @@ namespace MLNetPredict
             return classDeclaration?.Identifier.Text!;
         }
 
-        public static Assembly CompileAssembly(string[] sourceCodes)
+        public static Assembly CompileAssembly(string[] sourceCodes, string scenario)
         {
             var syntaxTrees = sourceCodes.Select(code => CSharpSyntaxTree.ParseText(code)).ToArray();
             var references = AppDomain.CurrentDomain.GetAssemblies()
@@ -55,40 +56,66 @@ namespace MLNetPredict
                 .Cast<MetadataReference>()
                 .ToList();
 
-            var mlNetAssemblies = new[]
+            string[] mlNetAssemblies;
+
+            if (scenario == "ImageClassification")
             {
-                typeof(Microsoft.ML.MLContext).Assembly.Location,
-                typeof(Microsoft.ML.IDataView).Assembly.Location,
-                typeof(Microsoft.ML.Transforms.Text.TextFeaturizingEstimator).Assembly.Location,
-
-                // Binary Classification
-                typeof(Microsoft.ML.Trainers.LightGbm.LightGbmBinaryTrainer).Assembly.Location,
-                typeof(Microsoft.ML.Trainers.FastTree.FastTreeBinaryTrainer).Assembly.Location,
-
-                // Regression
-                typeof(Microsoft.ML.Trainers.LightGbm.LightGbmRegressionTrainer).Assembly.Location,
-                typeof(Microsoft.ML.Trainers.FastTree.FastTreeRegressionTrainer).Assembly.Location,
-
-                // Multiclass Classification
-                typeof(Microsoft.ML.Trainers.LightGbm.LightGbmMulticlassTrainer).Assembly.Location,
-
-                // Clustering
-                typeof(Microsoft.ML.Trainers.KMeansTrainer).Assembly.Location,
-
-                // Recommendation
-                typeof(Microsoft.ML.Trainers.MatrixFactorizationTrainer).Assembly.Location,
-
-                // Anomaly Detection
-                typeof(Microsoft.ML.Transforms.TimeSeries.IidSpikeDetector).Assembly.Location,
-
-                // Time Series
-                typeof(Microsoft.ML.Transforms.TimeSeries.SsaForecastingTransformer).Assembly.Location,
-
-                // Time Series
-                typeof(Microsoft.ML.Transforms.TimeSeries.SsaForecastingTransformer).Assembly.Location,
-
-                typeof(Microsoft.ML.TorchSharp.NasBert.TextClassificationTrainer).Assembly.Location
-            };
+                mlNetAssemblies =
+                [
+                    typeof(Microsoft.ML.MLContext).Assembly.Location,
+                    typeof(Microsoft.ML.IDataView).Assembly.Location,
+                    typeof(Microsoft.ML.Vision.ImageClassificationTrainer).Assembly.Location,
+                ];
+            }
+            else if (scenario == "Classification")
+            {
+                mlNetAssemblies =
+                [
+                    typeof(Microsoft.ML.MLContext).Assembly.Location,
+                    typeof(Microsoft.ML.IDataView).Assembly.Location,
+                    typeof(Microsoft.ML.Vision.ImageClassificationTrainer).Assembly.Location,
+                ];
+            }
+            else if (scenario == "Forecasting")
+            {
+                mlNetAssemblies =
+                [
+                    typeof(Microsoft.ML.MLContext).Assembly.Location,
+                    typeof(Microsoft.ML.IDataView).Assembly.Location,
+                    typeof(Microsoft.ML.Transforms.TimeSeries.SsaForecastingTransformer).Assembly.Location,
+                ];
+            }
+            else if (scenario == "Regression")
+            {
+                mlNetAssemblies =
+                [
+                    typeof(Microsoft.ML.MLContext).Assembly.Location,
+                    typeof(Microsoft.ML.IDataView).Assembly.Location,
+                    typeof(Microsoft.ML.Trainers.LightGbm.LightGbmBinaryTrainer).Assembly.Location,
+                    typeof(Microsoft.ML.Trainers.FastTree.FastTreeBinaryTrainer).Assembly.Location,
+                    typeof(Microsoft.ML.Trainers.LightGbm.LightGbmMulticlassTrainer).Assembly.Location,
+                ];
+            }
+            else if (scenario == "Recommendation")
+            {
+                mlNetAssemblies =
+                [
+                    typeof(Microsoft.ML.MLContext).Assembly.Location,
+                    typeof(Microsoft.ML.IDataView).Assembly.Location,
+                    typeof(Microsoft.ML.Trainers.MatrixFactorizationTrainer).Assembly.Location,
+                ];
+            }
+            else if (scenario == "TextClassification")
+            {
+                mlNetAssemblies =
+                [
+                    typeof(Microsoft.ML.MLContext).Assembly.Location,
+                    typeof(Microsoft.ML.IDataView).Assembly.Location,
+                    typeof(Microsoft.ML.TorchSharp.NasBert.TextClassificationTrainer).Assembly.Location,
+                ];
+            }
+            else
+                throw new NotSupportedException($"Scenario {scenario} is not supported.");
 
             foreach (var assemblyPath in mlNetAssemblies)
             {
@@ -122,6 +149,7 @@ namespace MLNetPredict
             ms.Seek(0, SeekOrigin.Begin);
             return Assembly.Load(ms.ToArray());
         }
+
 
         public static string SanitizeHeader(string header)
         {

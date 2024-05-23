@@ -1,34 +1,34 @@
+using Microsoft.ML;
+
 namespace MLNetPredict.Tests
 {
-    public class SentimentTextClassificationTest
+    public class ConcreteCrackTest
     {
         private readonly string projPath;
         private readonly string modelPath;
 
-        public SentimentTextClassificationTest()
+        public ConcreteCrackTest()
         {
             var currentPath = AppDomain.CurrentDomain.BaseDirectory;
             this.projPath = currentPath.Substring(0, currentPath.IndexOf("bin"));
-            modelPath = Path.Combine(projPath, "models/sentiment");
+            modelPath = Path.Combine(projPath, "models/ConcreteCrack_D");
 
             // # pre requsites
-            // mlnet text-classification --dataset ".\files\sentiment\yelp_labelled.txt" --has-header false --label-col 1 --text-col 0 --output "./models" --name "Sentiment_Text" --log-file-path "./models/Sentiment_Text/logs.txt"
+            // mlnet regression --dataset "files/taxi-fare/taxi-fare-train.csv" --label-col "fare_amount" --validation-dataset "files/taxi-fare/taxi-fare-test.csv" --has-header true --name "TaxiFarePrediction" --train-time 120 --output "models" --log-file-path "./models/Sales/logs.txt"
         }
 
         [Fact]
         public void TestPredictionToFileOutput()
         {
-            var inputPath = Path.Combine(projPath, "files/sentiment/input.csv");
+            var inputPath = Path.Combine(projPath, "files/ConcreteCrack/D_test");
             // Arrange
             var args = new[]
             {
                 modelPath,
-                inputPath,
-                "--has-header", "true",
+                inputPath
             };
 
-            var outputPath = Path.GetDirectoryName(inputPath)!;
-            var actualOutputPath = Path.Combine(outputPath, $"{Path.GetFileNameWithoutExtension(inputPath)}-predicted.csv");
+            var actualOutputPath = Path.Combine(inputPath, $"{Path.GetFileNameWithoutExtension(inputPath)}-predicted.csv");
 
             if (File.Exists(actualOutputPath)) File.Delete(actualOutputPath);
 

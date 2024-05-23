@@ -80,7 +80,7 @@ namespace MLNetPredict
             return new TextClassificationPredictionResult(headers, classes.ToArray(), items);
         }
 
-        public static void SaveResultsForClassification(TextClassificationPredictionResult result, string outputPath)
+        public static void SaveResults(TextClassificationPredictionResult result, string outputPath)
         {
             using var writer = new StreamWriter(outputPath);
 

@@ -67,7 +67,7 @@ namespace MLNetPredict
             return new RecommendationPredictionResult(items);
         }
 
-        public static void SaveResultsForRecommendation(RecommendationPredictionResult result, string outputPath)
+        public static void SaveResults(RecommendationPredictionResult result, string outputPath)
         {
             using var writer = new StreamWriter(outputPath);
             writer.WriteLine("Score");
