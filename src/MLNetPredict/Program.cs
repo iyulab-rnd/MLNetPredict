@@ -97,6 +97,8 @@ namespace MLNetPredict
                 }
                 else if (configInfo.Scenario == "ObjectDetection")
                 {   
+                    Utils.InstallTorchSharpCpu();
+
                     var trainPath = Directory.GetFiles(modelDir, "*.training.cs").First();
                     var consumptionCode = File.ReadAllText(consumptionPath);
                     var trainCode = File.ReadAllText(trainPath);

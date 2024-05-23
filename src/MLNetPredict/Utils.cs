@@ -1,4 +1,6 @@
-﻿using System.Reflection;
+﻿using System.Diagnostics;
+using System.Reflection;
+using System.Runtime.Versioning;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using ICSharpCode.SharpZipLib.Tar;
@@ -221,70 +223,121 @@ namespace MLNetPredict
         [GeneratedRegex(@"[^a-zA-Z0-9_]")]
         private static partial Regex PropertyNameRegex();
 
+        private static readonly HashSet<string> installedPackages = [];
 
-        private static void InstallNugetPackage(string packageId, string packageVersion, string libFolder)
+        private static void InstallNugetPackage(string packageId, string packageVersion)
         {
-            string packagesPath = Path.Combine(Path.GetTempPath(), "nuget-packages");
-
-            var cache = new SourceCacheContext();
-            var settings = Settings.LoadDefaultSettings(root: null); // Load default settings
-            var repositories = new List<SourceRepository>
+            try
             {
-                Repository.Factory.GetCoreV3("https://api.nuget.org/v3/index.json")
-            };
+                string packageKey = $"{packageId}.{packageVersion}";
+                if (installedPackages.Contains(packageKey))
+                {
+                    ConsoleLogger.Current.LogInformation($"Package {packageId} version {packageVersion} is already installed.");
+                    return;
+                }
 
-            var repository = repositories.First();
-            ConsoleLogger.Current.LogInformation("Retrieving package resource...");
-            var resource = repository.GetResourceAsync<FindPackageByIdResource>().Result;
+                string packagesPath = Path.Combine(Path.GetTempPath(), "nuget-packages");
 
-            var packageIdentity = new PackageIdentity(packageId, NuGetVersion.Parse(packageVersion));
-            ConsoleLogger.Current.LogInformation($"Downloading package {packageId} version {packageVersion}...");
-            var packageDownloader = resource.GetPackageDownloaderAsync(packageIdentity, cache, ConsoleLogger.Current, CancellationToken.None).Result;
+                var cache = new SourceCacheContext();
+                var settings = Settings.LoadDefaultSettings(root: null); // Load default settings
+                var repositories = new List<SourceRepository>
+                {
+                    Repository.Factory.GetCoreV3("https://api.nuget.org/v3/index.json")
+                };
 
-            if (packageDownloader != null)
-            {
-                var packagePath = Path.Combine(packagesPath, $"{packageId}.{packageVersion}.nupkg");
-                Directory.CreateDirectory(packagesPath); // Ensure the directory exists
-                packageDownloader.CopyNupkgFileToAsync(packagePath, CancellationToken.None).Wait();
+                var repository = repositories.First();
+                ConsoleLogger.Current.LogInformation("Retrieving package resource...");
+                var resource = repository.GetResourceAsync<FindPackageByIdResource>().Result;
 
-                if (!File.Exists(packagePath))
+                var packageIdentity = new PackageIdentity(packageId, NuGetVersion.Parse(packageVersion));
+                ConsoleLogger.Current.LogInformation($"Downloading package {packageId} version {packageVersion}...");
+                var packageDownloader = resource.GetPackageDownloaderAsync(packageIdentity, cache, ConsoleLogger.Current, CancellationToken.None).Result;
+
+                if (packageDownloader != null)
+                {
+                    var packagePath = Path.Combine(packagesPath, $"{packageId}.{packageVersion}.nupkg");
+                    Directory.CreateDirectory(packagesPath); // Ensure the directory exists
+                    packageDownloader.CopyNupkgFileToAsync(packagePath, CancellationToken.None).Wait();
+
+                    if (!File.Exists(packagePath))
+                    {
+                        throw new Exception($"Failed to download {packageId} {packageVersion}.");
+                    }
+
+                    ConsoleLogger.Current.LogInformation($"Extracting package {packageId} version {packageVersion}...");
+                    // Extract the package
+                    using (var packageStream = File.OpenRead(packagePath))
+                    {
+                        var packageExtractionContext = new PackageExtractionContext(
+                            PackageSaveMode.Defaultv3,
+                            XmlDocFileSaveMode.Skip,
+                            ClientPolicyContext.GetClientPolicy(settings, ConsoleLogger.Current), // Pass the loaded settings here
+                            ConsoleLogger.Current
+                        );
+
+                        var packagePathResolver = new PackagePathResolver(packagesPath);
+                        var packageReader = new PackageArchiveReader(packageStream);
+                        var files = PackageExtractor.ExtractPackageAsync(
+                            packagePath,
+                            packageReader,
+                            packagePathResolver,
+                            packageExtractionContext,
+                            CancellationToken.None
+                        ).Result;
+
+                        // Mark this package as installed
+                        installedPackages.Add(packageKey);
+
+                        // Parse .nuspec file and install dependencies
+                        var nuspecReader = new NuspecReader(packageReader.GetNuspec());
+                        var dependencyGroups = nuspecReader.GetDependencyGroups().ToList();
+                        foreach (var dependencyGroup in dependencyGroups)
+                        {
+                            foreach (var dependency in dependencyGroup.Packages)
+                            {
+                                InstallNugetPackage(dependency.Id, dependency.VersionRange.MinVersion.ToString());
+                            }
+                        }
+
+                        // Copy only the necessary files (lib) to the appropriate location
+                        foreach (var file in files)
+                        {
+                            var filePath = Path.Combine(packagesPath, file);
+                            var relativePath = file.Substring(packagesPath.Length).TrimStart(Path.DirectorySeparatorChar);
+                            var segments = relativePath.Split(Path.DirectorySeparatorChar);
+
+                            if (segments.Length > 2
+                                && (segments[1].Equals("lib", StringComparison.OrdinalIgnoreCase) || segments[1].Equals("runtimes", StringComparison.OrdinalIgnoreCase)))
+                            {
+                                try
+                                {
+                                    // Remove the package id and version from the path
+                                    var targetRelativePath = string.Join(Path.DirectorySeparatorChar, segments[1..]);
+                                    var targetPath = Path.Combine(AppContext.BaseDirectory, targetRelativePath);
+
+                                    var dir = Path.GetDirectoryName(targetPath)!;
+                                    if (!Directory.Exists(dir)) { Directory.CreateDirectory(dir); }
+
+                                    File.Copy(filePath, targetPath, true);
+                                }
+                                catch (Exception)
+                                {
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+
+                    ConsoleLogger.Current.LogInformation("Package installation completed.");
+                }
+                else
                 {
                     throw new Exception($"Failed to download {packageId} {packageVersion}.");
                 }
-
-                ConsoleLogger.Current.LogInformation($"Extracting package {packageId} version {packageVersion}...");
-                // Extract the package
-                using (var packageStream = File.OpenRead(packagePath))
-                {
-                    var packageExtractionContext = new PackageExtractionContext(
-                        PackageSaveMode.Defaultv3,
-                        XmlDocFileSaveMode.Skip,
-                        ClientPolicyContext.GetClientPolicy(settings, ConsoleLogger.Current), // Pass the loaded settings here
-                        ConsoleLogger.Current
-                    );
-
-                    var packagePathResolver = new PackagePathResolver(packagesPath);
-                    var packageReader = new PackageArchiveReader(packageStream);
-                    var files = PackageExtractor.ExtractPackageAsync(
-                        packagePath,
-                        packageReader,
-                        packagePathResolver,
-                        packageExtractionContext,
-                        CancellationToken.None
-                    ).Result;
-                }
-
-                ConsoleLogger.Current.LogInformation($"Copying {packageId} native library to output directory...");
-                // Copy the TensorFlow native library to the output directory
-                var nativeLibFolder = Path.Combine(packagesPath, $"{packageId}.{packageVersion}", libFolder);
-                var outputLibFolder = Path.Combine(AppContext.BaseDirectory);
-                CopyDirectory(nativeLibFolder, outputLibFolder);
-
-                ConsoleLogger.Current.LogInformation("native library installation completed.");
-            }
-            else
+            } 
+            catch (Exception ex)
             {
-                throw new Exception($"Failed to download {packageId} {packageVersion}.");
+                ConsoleLogger.Current.LogError(ex.Message);
             }
         }
 
@@ -292,30 +345,51 @@ namespace MLNetPredict
         {
             string packageId = "SciSharp.TensorFlow.Redist";
             string packageVersion = "2.3.1";
-            
+
             var skipCheckFile = Path.Combine(AppContext.BaseDirectory, "runtimes", "win-x64", "native", "tensorflow.dll");
             if (File.Exists(skipCheckFile))
             {
                 return;
             }
 
-            InstallNugetPackage(packageId, packageVersion, "runtimes");
+            InstallNugetPackage(packageId, packageVersion);
+        }
+
+        public static void InstallTorchSharpCpu()
+        {
+            string packageId = "TorchSharp-cpu";
+            string packageVersion = "0.101.5";
+
+            var skipCheckFile = Path.Combine(AppContext.BaseDirectory, "runtimes", "win-x64", "native", "torch.dll");
+            if (File.Exists(skipCheckFile))
+            {
+                return;
+            }
+
+            InstallNugetPackage(packageId, packageVersion);
         }
 
         private static void CopyDirectory(string sourceDir, string destinationDir)
         {
-            Directory.CreateDirectory(destinationDir);
+            var dir = new DirectoryInfo(sourceDir);
 
-            foreach (var file in Directory.GetFiles(sourceDir))
+            if (!dir.Exists)
             {
-                var destFile = Path.Combine(destinationDir, Path.GetFileName(file));
-                File.Copy(file, destFile, true);
+                throw new DirectoryNotFoundException($"Source directory not found: {dir.FullName}");
             }
 
-            foreach (var directory in Directory.GetDirectories(sourceDir))
+            Directory.CreateDirectory(destinationDir);
+
+            foreach (FileInfo file in dir.GetFiles())
             {
-                var destDir = Path.Combine(destinationDir, Path.GetFileName(directory));
-                CopyDirectory(directory, destDir);
+                string targetFilePath = Path.Combine(destinationDir, file.Name);
+                file.CopyTo(targetFilePath, true);
+            }
+
+            foreach (DirectoryInfo subDir in dir.GetDirectories())
+            {
+                string newDestinationDir = Path.Combine(destinationDir, subDir.Name);
+                CopyDirectory(subDir.FullName, newDestinationDir);
             }
         }
 
