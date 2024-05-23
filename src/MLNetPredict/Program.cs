@@ -28,7 +28,6 @@ namespace MLNetPredict
             var mlContext = new MLContext();
             Console.WriteLine("[ML.NET Prediction Engine]");
 
-            //args = [@"D:\data\MLNetPredict\src\MLNetPredict.Tests\models\ConcreteCrack_D", @"D:\data\MLNetPredict\src\MLNetPredict.Tests\files\ConcreteCrack\D_test"];
             return CommandLine.Parser.Default.ParseArguments<Options>(args)
                 .MapResult(
                     (Options opts) => RunPrediction(opts),
@@ -85,6 +84,11 @@ namespace MLNetPredict
                 Console.WriteLine($"Processing input file: {inputPath}");
                 Console.WriteLine($"Using model: {modelPath}");
                 Console.WriteLine($"Output will be saved to: {outputFile}");
+
+                if (configInfo.Scenario == "ImageClassification")
+                {
+                    Utils.InstallTensorFlowRedist();
+                }
 
                 var consumptionCode = File.ReadAllText(consumptionPath);
                 var assembly = Utils.CompileAssembly([consumptionCode], configInfo.Scenario);

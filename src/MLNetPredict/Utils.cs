@@ -5,6 +5,14 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Newtonsoft.Json.Linq;
+using NuGet.Common;
+using NuGet.Configuration;
+using NuGet.Packaging;
+using NuGet.Packaging.Core;
+using NuGet.Packaging.Signing;
+using NuGet.Protocol;
+using NuGet.Protocol.Core.Types;
+using NuGet.Versioning;
 using Tensorflow;
 
 namespace MLNetPredict
@@ -198,5 +206,98 @@ namespace MLNetPredict
 
         [GeneratedRegex(@"[^a-zA-Z0-9_]")]
         private static partial Regex PropertyNameRegex();
+
+
+        public static void InstallTensorFlowRedist()
+        {
+            string packageId = "SciSharp.TensorFlow.Redist";
+            string packageVersion = "2.3.1";
+            string packagesPath = Path.Combine(Path.GetTempPath(), "nuget-packages");
+            var outputLibFolder = Path.Combine(AppContext.BaseDirectory, "runtimes", "win-x64", "native");
+            var tensorflowDllPath = Path.Combine(outputLibFolder, "tensorflow.dll");
+
+            // Check if the TensorFlow native library is already installed
+            if (File.Exists(tensorflowDllPath))
+            {
+                return;
+            }
+
+            var cache = new SourceCacheContext();
+            var settings = Settings.LoadDefaultSettings(root: null); // Load default settings
+            var repositories = new List<SourceRepository>
+            {
+                Repository.Factory.GetCoreV3("https://api.nuget.org/v3/index.json")
+            };
+
+            var repository = repositories.First();
+            ConsoleLogger.Current.LogInformation("Retrieving package resource...");
+            var resource = repository.GetResourceAsync<FindPackageByIdResource>().Result;
+
+            var packageIdentity = new PackageIdentity(packageId, NuGetVersion.Parse(packageVersion));
+            ConsoleLogger.Current.LogInformation($"Downloading package {packageId} version {packageVersion}...");
+            var packageDownloader = resource.GetPackageDownloaderAsync(packageIdentity, cache, ConsoleLogger.Current, CancellationToken.None).Result;
+
+            if (packageDownloader != null)
+            {
+                var packagePath = Path.Combine(packagesPath, $"{packageId}.{packageVersion}.nupkg");
+                Directory.CreateDirectory(packagesPath); // Ensure the directory exists
+                packageDownloader.CopyNupkgFileToAsync(packagePath, CancellationToken.None).Wait();
+
+                if (!File.Exists(packagePath))
+                {
+                    throw new Exception($"Failed to download {packageId} {packageVersion}.");
+                }
+
+                ConsoleLogger.Current.LogInformation($"Extracting package {packageId} version {packageVersion}...");
+                // Extract the package
+                using (var packageStream = File.OpenRead(packagePath))
+                {
+                    var packageExtractionContext = new PackageExtractionContext(
+                        PackageSaveMode.Defaultv3,
+                        XmlDocFileSaveMode.Skip,
+                        ClientPolicyContext.GetClientPolicy(settings, ConsoleLogger.Current), // Pass the loaded settings here
+                        ConsoleLogger.Current
+                    );
+
+                    var packagePathResolver = new PackagePathResolver(packagesPath);
+                    var packageReader = new PackageArchiveReader(packageStream);
+                    var files = PackageExtractor.ExtractPackageAsync(
+                        packagePath,
+                        packageReader,
+                        packagePathResolver,
+                        packageExtractionContext,
+                        CancellationToken.None
+                    ).Result;
+                }
+
+                ConsoleLogger.Current.LogInformation("Copying TensorFlow native library to output directory...");
+                // Copy the TensorFlow native library to the output directory
+                var nativeLibFolder = Path.Combine(packagesPath, $"{packageId}.{packageVersion}", "runtimes");
+                CopyDirectory(nativeLibFolder, outputLibFolder);
+
+                ConsoleLogger.Current.LogInformation("TensorFlow native library installation completed.");
+            }
+            else
+            {
+                throw new Exception($"Failed to download {packageId} {packageVersion}.");
+            }
+        }
+
+        private static void CopyDirectory(string sourceDir, string destinationDir)
+        {
+            Directory.CreateDirectory(destinationDir);
+
+            foreach (var file in Directory.GetFiles(sourceDir))
+            {
+                var destFile = Path.Combine(destinationDir, Path.GetFileName(file));
+                File.Copy(file, destFile, true);
+            }
+
+            foreach (var directory in Directory.GetDirectories(sourceDir))
+            {
+                var destDir = Path.Combine(destinationDir, Path.GetFileName(directory));
+                CopyDirectory(directory, destDir);
+            }
+        }
     }
 }

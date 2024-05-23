@@ -53,12 +53,12 @@ namespace MLNetPredict
                 }
                 else
                 {
-                    // input logic here...
+                    // input .csv or .tsv or .txt file
                 }
             }
 
             var output = predictMethod.Invoke(null, [input, horizon]);
-            return new ForecastingPredictionResult(output);
+            return new ForecastingPredictionResult(output!);
         }
 
         public static void SaveResults(ForecastingPredictionResult result, string outputPath)

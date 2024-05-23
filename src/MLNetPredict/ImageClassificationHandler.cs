@@ -1,5 +1,4 @@
 ﻿using System.Reflection;
-using System.Drawing;
 
 namespace MLNetPredict
 {
@@ -15,7 +14,7 @@ namespace MLNetPredict
 
     public static class ImageClassificationHandler
     {
-        private static readonly string[] SupportedImageFormats = new[] { "*.jpg", "*.jpeg", "*.png", "*.bmp", "*.gif" };
+        private static readonly string[] SupportedImageFormats = ["*.jpg", "*.jpeg", "*.png", "*.bmp", "*.gif"];
 
         public static ImageClassificationPredictionResult Predict(Assembly assembly, string inputFolderPath, string className)
         {
@@ -60,7 +59,7 @@ namespace MLNetPredict
                     ?? throw new InvalidOperationException("Property ImageSource not found.");
                 property.SetValue(input, image);
 
-                var result = (dynamic)predictMethod.Invoke(null, new object[] { input })!;
+                var result = (dynamic)predictMethod.Invoke(null, [input])!;
                 items.Add((imagePath, result.PredictedLabel));
             }
 
@@ -78,4 +77,5 @@ namespace MLNetPredict
             }
         }
     }
+
 }
