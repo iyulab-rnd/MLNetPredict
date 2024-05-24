@@ -1,4 +1,4 @@
-# MLNetPredict
+# MLNetPredict (mlnet-predict)
 
 MLNetPredict is a .NET tool for predicting various machine learning tasks using ML.NET. It supports multiple scenarios including classification, regression, forecasting, recommendation, image/text classification, and object detection.
 
@@ -46,42 +46,49 @@ mlnet-predict <model-path> <input-path> [options]
 #### Classification
 
 ```bash
+mlnet-predict <model-path> <input-path> [options]
 mlnet-predict models/GithubIssues files/github-issue/input.csv --has-header true
 ```
 
 #### Regression
 
 ```bash
+mlnet-predict <model-path> <input-path> [options]
 mlnet-predict models/TaxiFarePrediction files/taxi-fare/input.csv
 ```
 
 #### Forecasting
 
 ```bash
+mlnet-predict <model-path> <input-path> [options]
 mlnet-predict models/HourlyEnergyConsumption files/hourly_energy_consumption/input.json
 ```
 
 #### Recommendation
 
 ```bash
+mlnet-predict <model-path> <input-path> [options]
 mlnet-predict models/MovieRecommendation files/movie-recommendation/input.csv
 ```
 
 #### Image Classification
 
 ```bash
+mlnet-predict <model-path> <input-path> [options]
 mlnet-predict models/ImageClassification files/images/
 ```
 
 #### Text Classification
 
 ```bash
+mlnet-predict <model-path> <input-path> [options]
 mlnet-predict models/TextClassification files/texts/input.csv --has-header true
 ```
 
 #### Object Detection
 
 ```bash
+mlnet-predict <model-path> <input-path> [options]
 mlnet-predict models/ObjectDetection files/images/
 ```
 
@@ -115,12 +122,24 @@ CMT,1,1,637,1.4,CRD,8.5
 CMT,1,1,181,0.6,CSH,4.5
 ```
 
+#### Creating the Model with `mlnet`
+
+```bash
+mlnet regression --dataset "files/taxi-fare/taxi-fare-train.csv" --label-col "fare_amount" --validation-dataset "files/taxi-fare/taxi-fare-test.csv" --has-header true --name "TaxiFarePrediction" --train-time 120 --output "models" --log-file-path "./models/TaxiFarePrediction/logs.txt"
+```
+
 #### Sample Input Data (`input.csv`)
 
 ```csv
 vendor_id,rate_code,passenger_count,trip_time_in_secs,trip_distance,payment_type,fare_amount
 CMT,1,1,584,2.3,CSH,
 CMT,1,1,955,3.1,CRD,
+```
+
+#### Predicting with `mlnet-predict`
+
+```bash
+mlnet-predict models/TaxiFarePrediction files/taxi-fare/input.csv --output-path files/taxi-fare/predicted/
 ```
 
 #### Sample Predicted Output Data (`input-predicted.csv`)

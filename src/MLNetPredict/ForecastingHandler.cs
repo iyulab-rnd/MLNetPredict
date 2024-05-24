@@ -68,6 +68,7 @@ namespace MLNetPredict
 
             using var writer = new StreamWriter(outputPath);
             writer.WriteLine("PredictedValue,LowerBound,UpperBound");
+            Console.WriteLine("PredictedValue,LowerBound,UpperBound");
 
             float[]? values = null;
             float[]? lowerBounds = null;
@@ -97,6 +98,7 @@ namespace MLNetPredict
             {
                 var line = $"{Utils.FormatValue(values[i])},{Utils.FormatValue(lowerBounds[i])},{Utils.FormatValue(upperBounds[i])}";
                 writer.WriteLine(line);
+                Console.WriteLine(line);
             }
         }
     }

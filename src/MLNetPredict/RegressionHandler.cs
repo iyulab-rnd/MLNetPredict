@@ -70,12 +70,14 @@ namespace MLNetPredict
         {
             using var writer = new StreamWriter(outputPath);
             writer.WriteLine("Score");
+            Console.WriteLine("Score");
 
             foreach (var (_, output) in result.Items)
             {
                 var value = output.GetType().GetProperty("Score")?.GetValue(output);
                 var line = $"{Utils.FormatValue(value)}";
                 writer.WriteLine(line);
+                Console.WriteLine(line);
             }
         }
     }

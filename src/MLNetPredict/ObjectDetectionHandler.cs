@@ -75,13 +75,16 @@ namespace MLNetPredict
         {
             using var writer = new StreamWriter(outputPath);
             writer.WriteLine("ImagePath,PredictedLabels,BoundingBoxes,Scores");
+            Console.WriteLine("ImagePath,PredictedLabels,BoundingBoxes,Scores");
 
             foreach (var (imagePath, predictedLabels, boundingBoxes, scores) in result.Items)
             {
                 var predictedLabelsStr = predictedLabels == null ? string.Empty : string.Join(";", predictedLabels);
                 var boundingBoxesStr = boundingBoxes == null ? string.Empty : string.Join(";", boundingBoxes.Select(b => b.ToString("F6")));
                 var scoresStr = scores == null ? string.Empty : string.Join(";", scores.Select(s => s.ToString("F6")));
-                writer.WriteLine($"{Path.GetFileName(imagePath)},{predictedLabelsStr},{boundingBoxesStr},{scoresStr}");
+                var line = $"{Path.GetFileName(imagePath)},{predictedLabelsStr},{boundingBoxesStr},{scoresStr}";
+                writer.WriteLine(line);
+                Console.WriteLine(line);
             }
         }
     }

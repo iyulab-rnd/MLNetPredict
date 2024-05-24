@@ -7,7 +7,12 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MLNetPredict", "MLNetPredic
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MLNetPredict.Tests", "MLNetPredict.Tests\MLNetPredict.Tests.csproj", "{C47DB318-72C6-434F-A71A-ECC1736505BE}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "FilePreprocess", "MLNetFilePreprocess\FilePreprocess.csproj", "{97E9F57A-2980-42C1-A833-50B87B351ADD}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "FilePreprocess", "MLNetFilePreprocess\FilePreprocess.csproj", "{97E9F57A-2980-42C1-A833-50B87B351ADD}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{0C9A37F0-5A79-4228-BBA1-A576EE40C941}"
+	ProjectSection(SolutionItems) = preProject
+		..\README.md = ..\README.md
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

@@ -70,10 +70,13 @@ namespace MLNetPredict
         {
             using var writer = new StreamWriter(outputPath);
             writer.WriteLine("ImagePath,PredictedLabel");
+            Console.WriteLine("ImagePath,PredictedLabel");
 
             foreach (var (imagePath, predictedLabel) in result.Items)
             {
-                writer.WriteLine($"{Path.GetFileName(imagePath)},{predictedLabel}");
+                var line = $"{Path.GetFileName(imagePath)},{predictedLabel}";
+                writer.WriteLine(line);
+                Console.WriteLine(line);
             }
         }
     }

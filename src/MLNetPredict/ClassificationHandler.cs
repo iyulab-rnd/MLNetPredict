@@ -85,19 +85,21 @@ namespace MLNetPredict
 
             if (result.Classes.Length == 2)
             {
-                var headers = new string[] { "PredictedLabel", "Score" };
-                writer.WriteLine(string.Join(",", headers));
+                writer.WriteLine("PredictedLabel,Score");
+                Console.WriteLine("PredictedLabel,Score");
 
                 foreach (var (_, Predictions) in result.Items)
                 {
                     var prediction = Predictions.FirstOrDefault();
-                    writer.WriteLine($"{prediction.Key},{Utils.FormatValue(prediction.Value)}");
+                    var line = $"{prediction.Key},{Utils.FormatValue(prediction.Value)}";
+                    writer.WriteLine(line);
+                    Console.WriteLine(line);
                 }
             }
             else
             {
-                var headers = new string[] { "Top1", "Top1Score", "Top2", "Top2Score", "Top3", "Top3Score" };
-                writer.WriteLine(string.Join(",", headers));
+                writer.WriteLine("Top1,Top1Score,Top2,Top2Score,Top3,Top3Score");
+                Console.WriteLine("Top1,Top1Score,Top2,Top2Score,Top3,Top3Score");
 
                 foreach (var (_, Predictions) in result.Items)
                 {
@@ -119,6 +121,7 @@ namespace MLNetPredict
 
                     var line = string.Join(",", values);
                     writer.WriteLine(line);
+                    Console.WriteLine(line);
                 }
             }
         }
