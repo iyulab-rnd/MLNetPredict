@@ -63,22 +63,24 @@ namespace MLNetPredict
                 items.Add((imagePath, result.PredictedLabel));
             }
 
-            return new ImageClassificationPredictionResult(items.ToArray());
+            return new ImageClassificationPredictionResult([.. items]);
         }
 
         public static void SaveResults(ImageClassificationPredictionResult result, string outputPath)
         {
+            var dir = Path.GetDirectoryName(outputPath);
+            if (Directory.Exists(dir) != true) Directory.CreateDirectory(dir!);
+
             using var writer = new StreamWriter(outputPath);
             writer.WriteLine("ImagePath,PredictedLabel");
             Console.WriteLine("ImagePath,PredictedLabel");
 
             foreach (var (imagePath, predictedLabel) in result.Items)
-            {
+            {   
                 var line = $"{Path.GetFileName(imagePath)},{predictedLabel}";
                 writer.WriteLine(line);
                 Console.WriteLine(line);
             }
         }
     }
-
 }

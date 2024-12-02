@@ -76,6 +76,9 @@ mlnet-predict models/MovieRecommendation files/movie-recommendation/input.csv
 ```bash
 mlnet-predict <model-path> <input-path> [options]
 mlnet-predict models/ImageClassification files/images/
+
+
+mlnet-predict models/ImageClassification files/images/ --output-path /files/output
 ```
 
 #### Text Classification
