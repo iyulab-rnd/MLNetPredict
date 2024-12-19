@@ -1,5 +1,6 @@
 ﻿using CommandLine;
 using Microsoft.ML;
+using MLNetPredict.MLHandlers;
 using System.Reflection;
 
 namespace MLNetPredict;
@@ -31,9 +32,10 @@ public static partial class Program
 
 #if DEBUG
         args = [
-            @"D:\data\ML-Research\OCR_01\output\DigitClassifier", // model-path
-            @"D:\data\ML-Research\OCR_01\test", // input-path
-            "--output-path", @"D:\data\ML-Research\OCR_01\test_output"
+            @"D:\data\MLoop\storage\scenarios\76de3a15eb78480ba0cfe4288079fae0\models\m20241219073828\Model", // model-path
+            @"D:\data\MLoop\storage\scenarios\76de3a15eb78480ba0cfe4288079fae0\predictions\2224a7f30551496fb9f125d0b3090760\input.tsv", // input-path
+            "--has-header", "true"
+            //"--output-path", @"D:\data\ML-Research\OCR_01\test_output"
         ];
 #endif
 
@@ -50,132 +52,64 @@ public static partial class Program
             var modelDir = opts.ModelPath;
             var inputPath = opts.InputPath;
             var outputPath = opts.OutputPath ?? (Directory.Exists(inputPath) ? inputPath : Path.GetDirectoryName(inputPath)!);
+            var outputFile = Path.Combine(outputPath, $"{Path.GetFileNameWithoutExtension(inputPath)}-predicted.csv");
 
-            if (!Directory.Exists(modelDir))
-            {
-                Console.WriteLine($"Model directory '{modelDir}' does not exist.");
-                return 1;
-            }
+            Console.WriteLine($"Processing input file: {inputPath}");
 
-            // Install packages from .csproj if it exists
-            var csprojFiles = Directory.GetFiles(modelDir, "*.csproj");
-            if (csprojFiles.Length > 0)
-            {
-                Console.WriteLine("Found project file. Installing NuGet packages...");
-                Utils.InstallFromCsProj(csprojFiles[0]);
-            }
+            // Initialize model and get config with explicit type declaration
+            (Assembly assembly, ConfigInfo configInfo) = ModelInitializer.Initialize(modelDir);
 
-            var modelFiles = Directory.GetFiles(modelDir, "*.mlnet");
-            if (modelFiles.Length == 0)
-            {
-                Console.WriteLine("No .mlnet model file found. Ensure you have created a model using the latest version of mlnet-cli.");
-                return 1;
-            }
-
-            var modelPath = modelFiles.First();
-
-            var consumptionFiles = Directory.GetFiles(modelDir, "*.consumption.cs");
-            if (consumptionFiles.Length == 0)
-            {
-                Console.WriteLine("No .consumption.cs file found. Ensure you have created a model using the latest version of mlnet-cli.");
-                return 1;
-            }
-
-            var consumptionPath = consumptionFiles.First();
-
-            var mbconfigFiles = Directory.GetFiles(modelDir, "*.mbconfig");
-            if (mbconfigFiles.Length == 0)
-            {
-                Console.WriteLine("No .mbconfig file found. Ensure you have created a model using the latest version of mlnet-cli.");
-                return 1;
-            }
-
-            var mbconfigPath = mbconfigFiles.First();
-            var configInfo = Utils.GetConfigInfo(mbconfigPath);
+            // Apply user overrides for config if specified
             var hasHeader = opts.HasHeader ?? configInfo.HasHeader;
             var delimiter = opts.Separator ?? Utils.GetDelimiterFromExtension(inputPath) ?? configInfo.Delimiter;
 
-            var inputFileName = Path.GetFileNameWithoutExtension(inputPath);
-            var outputFile = Path.Combine(outputPath, $"{inputFileName}-predicted.csv");
-
-            Console.WriteLine($"Processing input file: {inputPath}");
-            Console.WriteLine($"Using model: {modelPath}");
+            Console.WriteLine($"Using model: {modelDir}");
             Console.WriteLine($"Output will be saved to: {outputFile}");
 
-            Assembly assembly;
-            string code;
-            if (configInfo.Scenario == "ImageClassification")
-            {
-                // Utils.InstallTensorFlowRedist();
+            // Ensure output directory exists
+            Directory.CreateDirectory(Path.GetDirectoryName(outputFile)!);
 
-                code = File.ReadAllText(consumptionPath);
-                assembly = Utils.CompileAssembly(code, configInfo.Scenario);
-            }
-            else if (configInfo.Scenario == "ObjectDetection")
+            // Execute prediction based on scenario
+            switch (configInfo.Scenario.ToLowerInvariant())
             {
-                Utils.InstallTorchSharpCpu();
+                case "classification":
+                    var classResult = ClassificationHandler.Predict(assembly, inputPath, className: "Model", hasHeader, delimiter);
+                    ClassificationHandler.SaveResults(classResult, outputFile);
+                    break;
 
-                var trainPath = Directory.GetFiles(modelDir, "*.training.cs").First();
-                var consumptionCode = File.ReadAllText(consumptionPath);
-                var trainCode = File.ReadAllText(trainPath);
+                case "forecasting":
+                    var forecastResult = ForecastingHandler.Predict(assembly, inputPath, className: "Model", hasHeader, delimiter);
+                    ForecastingHandler.SaveResults(forecastResult, outputFile);
+                    break;
 
-                code = Utils.CombinePartialClassCodes(consumptionCode, trainCode);
-                assembly = Utils.CompileAssembly(code, configInfo.Scenario);
-            }
-            else
-            {
-                code = File.ReadAllText(consumptionPath);
-                assembly = Utils.CompileAssembly(code, configInfo.Scenario);
-            }
+                case "regression":
+                    var regResult = RegressionHandler.Predict(assembly, inputPath, className: "Model", hasHeader, delimiter);
+                    RegressionHandler.SaveResults(regResult, outputFile);
+                    break;
 
-            var className = Utils.GetClassName(code);
-            if (className == null)
-            {
-                Console.WriteLine("Class name could not be found in the provided code.");
-                return 1;
-            }
+                case "recommendation":
+                    var recResult = RecommendationHandler.Predict(assembly, inputPath, className: "Model", hasHeader, delimiter);
+                    RecommendationHandler.SaveResults(recResult, outputFile);
+                    break;
 
-            ModelHandler.SetModelPath(assembly, modelPath, className);
+                case "textclassification":
+                    var textResult = TextClassificationHandler.Predict(assembly, inputPath, className: "Model", hasHeader, delimiter);
+                    TextClassificationHandler.SaveResults(textResult, outputFile);
+                    break;
 
-            if (configInfo.Scenario == "Classification")
-            {
-                var predictionResult = ClassificationHandler.Predict(assembly, inputPath, className, hasHeader, delimiter);
-                ClassificationHandler.SaveResults(predictionResult, outputFile);
-            }
-            else if (configInfo.Scenario == "Forecasting")
-            {
-                var predictionResult = ForecastingHandler.Predict(assembly, inputPath, className, hasHeader, delimiter);
-                ForecastingHandler.SaveResults(predictionResult, outputFile);
-            }
-            else if (configInfo.Scenario == "Regression")
-            {
-                var predictionResult = RegressionHandler.Predict(assembly, inputPath, className, hasHeader, delimiter);
-                RegressionHandler.SaveResults(predictionResult, outputFile);
-            }
-            else if (configInfo.Scenario == "Recommendation")
-            {
-                var predictionResult = RecommendationHandler.Predict(assembly, inputPath, className, hasHeader, delimiter);
-                RecommendationHandler.SaveResults(predictionResult, outputFile);
-            }
-            else if (configInfo.Scenario == "TextClassification")
-            {
-                var predictionResult = TextClassificationHandler.Predict(assembly, inputPath, className, hasHeader, delimiter);
-                TextClassificationHandler.SaveResults(predictionResult, outputFile);
-            }
-            else if (configInfo.Scenario == "ImageClassification")
-            {
-                var predictionResult = ImageClassificationHandler.Predict(assembly, inputPath, className);
-                ImageClassificationHandler.SaveResults(predictionResult, outputFile);
-            }
-            else if (configInfo.Scenario == "ObjectDetection")
-            {
-                var predictionResult = ObjectDetectionHandler.Predict(assembly, inputPath, className);
-                ObjectDetectionHandler.SaveResults(predictionResult, outputFile);
-            }
-            else
-            {
-                Console.WriteLine($"Scenario {configInfo.Scenario} is not supported.");
-                return 1;
+                case "imageclassification":
+                    var imageResult = ImageClassificationHandler.Predict(assembly, inputPath, className: "Model");
+                    ImageClassificationHandler.SaveResults(imageResult, outputFile);
+                    break;
+
+                case "objectdetection":
+                    var objResult = ObjectDetectionHandler.Predict(assembly, inputPath, className: "Model");
+                    ObjectDetectionHandler.SaveResults(objResult, outputFile);
+                    break;
+
+                default:
+                    Console.WriteLine($"Scenario {configInfo.Scenario} is not supported.");
+                    return 1;
             }
 
             Console.WriteLine("Prediction completed successfully.");
@@ -184,6 +118,10 @@ public static partial class Program
         catch (Exception ex)
         {
             Console.Error.WriteLine($"Error: {ex.Message}");
+            if (ex.InnerException != null)
+            {
+                Console.Error.WriteLine($"Inner Error: {ex.InnerException.Message}");
+            }
             return 1;
         }
     }
