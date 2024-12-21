@@ -15,7 +15,7 @@ public static partial class Program
         [Value(1, MetaName = "input-path", HelpText = "Path to the input file.", Required = true)]
         public required string InputPath { get; set; }
 
-        [Option('o', "output-path", HelpText = "Path to the output directory (optional).")]
+        [Option('o', "output-path", HelpText = "Path to the output file or directory (optional).")]
         public string? OutputPath { get; set; }
 
         [Option("has-header", HelpText = "Specify [true|false] depending if dataset file(s) have header row. Use auto-detect if this flag is not set. (optional).")]
@@ -51,12 +51,40 @@ public static partial class Program
         {
             var modelDir = opts.ModelPath;
             var inputPath = opts.InputPath;
-            var outputPath = opts.OutputPath ?? (Directory.Exists(inputPath) ? inputPath : Path.GetDirectoryName(inputPath)!);
-            var outputFile = Path.Combine(outputPath, $"{Path.GetFileNameWithoutExtension(inputPath)}-predicted.csv");
+            string outputFile;
+
+            // Determine output file path
+            if (opts.OutputPath != null)
+            {
+                if (Path.HasExtension(opts.OutputPath))
+                {
+                    // If output path has extension, use it as is
+                    outputFile = opts.OutputPath;
+
+                    // Ensure output directory exists
+                    var outputDir = Path.GetDirectoryName(outputFile);
+                    if (!string.IsNullOrEmpty(outputDir))
+                    {
+                        Directory.CreateDirectory(outputDir);
+                    }
+                }
+                else
+                {
+                    // If output path is a directory, create default filename
+                    Directory.CreateDirectory(opts.OutputPath);
+                    outputFile = Path.Combine(opts.OutputPath, $"{Path.GetFileNameWithoutExtension(inputPath)}-predicted.csv");
+                }
+            }
+            else
+            {
+                // If no output path specified, use input directory
+                var outputDir = Directory.Exists(inputPath) ? inputPath : Path.GetDirectoryName(inputPath)!;
+                outputFile = Path.Combine(outputDir, $"{Path.GetFileNameWithoutExtension(inputPath)}-predicted.csv");
+            }
 
             Console.WriteLine($"Processing input file: {inputPath}");
 
-            // Initialize model and get config with explicit type declaration
+            // Initialize model and get config
             (Assembly assembly, ConfigInfo configInfo) = ModelInitializer.Initialize(modelDir);
 
             // Apply user overrides for config if specified
@@ -65,9 +93,6 @@ public static partial class Program
 
             Console.WriteLine($"Using model: {modelDir}");
             Console.WriteLine($"Output will be saved to: {outputFile}");
-
-            // Ensure output directory exists
-            Directory.CreateDirectory(Path.GetDirectoryName(outputFile)!);
 
             // Execute prediction based on scenario
             switch (configInfo.Scenario.ToLowerInvariant())
