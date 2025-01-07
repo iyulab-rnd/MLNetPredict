@@ -70,24 +70,95 @@ public partial class ModelInitializer
         var jsonConfig = System.Text.Json.JsonDocument.Parse(configContent);
         var root = jsonConfig.RootElement;
 
-        var hasHeader = root.GetProperty("DataSource").GetProperty("HasHeader").GetBoolean();
-        var delimiter = root.GetProperty("DataSource").GetProperty("Delimiter").GetString() ?? ",";
-        var scenario = root.GetProperty("Scenario").GetString() ?? "Unknown";
-        var labelColumn = root.GetProperty("TrainingOption").GetProperty("LabelColumn").GetString() ?? "Label";
+        // Get scenario and normalize it to match ML.NET CLI standard commands
+        var rawScenario = root.GetProperty("Scenario").GetString() ?? "Unknown";
+        var scenario = NormalizeScenario(rawScenario);
 
+        // Initialize with default values
+        var hasHeader = false;
+        var delimiter = ",";
+        var labelColumn = "Label";
         var columns = new List<string>();
-        if (root.GetProperty("DataSource").TryGetProperty("ColumnProperties", out var colProps))
+
+        // Handle different scenarios
+        switch (scenario)
         {
-            foreach (var col in colProps.EnumerateArray())
-            {
-                if (col.TryGetProperty("ColumnName", out var colName))
+            case "image-classification":
+            case "object-detection":
+                // Image-based scenarios typically don't have these properties
+                hasHeader = false;
+                delimiter = ",";
+                labelColumn = "Label";
+
+                // Try to get any column information if available
+                if (root.TryGetProperty("DataSource", out var dataSource))
                 {
-                    columns.Add(colName.GetString() ?? string.Empty);
+                    if (dataSource.TryGetProperty("ColumnProperties", out var colProps))
+                    {
+                        foreach (var col in colProps.EnumerateArray())
+                        {
+                            if (col.TryGetProperty("ColumnName", out var colName))
+                            {
+                                columns.Add(colName.GetString() ?? string.Empty);
+                            }
+                        }
+                    }
                 }
-            }
+                break;
+
+            default:
+                // For other scenarios, try to get standard properties
+                if (root.TryGetProperty("DataSource", out var ds))
+                {
+                    if (ds.TryGetProperty("HasHeader", out var header))
+                    {
+                        hasHeader = header.GetBoolean();
+                    }
+
+                    if (ds.TryGetProperty("Delimiter", out var delim))
+                    {
+                        delimiter = delim.GetString() ?? ",";
+                    }
+
+                    if (ds.TryGetProperty("ColumnProperties", out var colProps))
+                    {
+                        foreach (var col in colProps.EnumerateArray())
+                        {
+                            if (col.TryGetProperty("ColumnName", out var colName))
+                            {
+                                columns.Add(colName.GetString() ?? string.Empty);
+                            }
+                        }
+                    }
+                }
+
+                // Try to get label column from training options
+                if (root.TryGetProperty("TrainingOption", out var trainOpt))
+                {
+                    if (trainOpt.TryGetProperty("LabelColumn", out var label))
+                    {
+                        labelColumn = label.GetString() ?? "Label";
+                    }
+                }
+                break;
         }
 
         return new ConfigInfo(hasHeader, delimiter, columns, labelColumn, scenario);
+    }
+
+    private static string NormalizeScenario(string scenario)
+    {
+        // Convert to lowercase and trim
+        scenario = scenario.ToLowerInvariant().Trim();
+
+        // Map to standard ML.NET CLI commands
+        return scenario switch
+        {
+            "imageclassification" or "image_classification" => "image-classification",
+            "textclassification" or "text_classification" => "text-classification",
+            "objectdetection" or "object_detection" => "object-detection",
+            _ => scenario
+        };
     }
 
     private static string? GetClassName(string code)
@@ -171,6 +242,29 @@ public partial class ModelInitializer
                                 stream.CopyTo(targetStream);
                             }
                         }
+                    }
+
+                    // 특별 처리: SciSharp.TensorFlow.Redist
+                    if (packageId.Equals("SciSharp.TensorFlow.Redist", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string nativeOutputDir = Path.Combine(AppContext.BaseDirectory, "tensorflow_native");
+                        Directory.CreateDirectory(nativeOutputDir);
+                        foreach (var file in packageReader.GetFiles())
+                        {
+                            if (file.StartsWith("runtimes/", StringComparison.OrdinalIgnoreCase) &&
+                                (file.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) ||
+                                 file.EndsWith(".so", StringComparison.OrdinalIgnoreCase) ||
+                                 file.EndsWith(".dylib", StringComparison.OrdinalIgnoreCase)))
+                            {
+                                var targetPath = Path.Combine(nativeOutputDir, Path.GetFileName(file));
+                                using var stream = packageReader.GetStream(file);
+                                using var targetStream = File.Create(targetPath);
+                                stream.CopyTo(targetStream);
+                            }
+                        }
+                        var currentPath = Environment.GetEnvironmentVariable("PATH") ?? "";
+                        Environment.SetEnvironmentVariable("PATH", nativeOutputDir + ";" + currentPath);
+                        ConsoleLogger.Current.LogInformation($"Added TensorFlow native directory to PATH: {nativeOutputDir}");
                     }
 
                     InstalledPackages.Add(packageKey);

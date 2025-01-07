@@ -31,10 +31,14 @@ public static partial class Program
         Console.WriteLine("[ML.NET Prediction Engine]");
 
 #if DEBUG
+        // mlnet-predict "" ""
         args = [
-            @"D:\data\MLoop\storage\scenarios\76de3a15eb78480ba0cfe4288079fae0\models\m20241219073828\Model", // model-path
-            @"D:\data\MLoop\storage\scenarios\76de3a15eb78480ba0cfe4288079fae0\predictions\2224a7f30551496fb9f125d0b3090760\input.tsv", // input-path
-            "--has-header", "true"
+            @"D:/mloop-folder/mloop/scenarios/acc7f3460a414d1c9dccbee17573155b/models/m20250107023322/Model",
+            @"D:/mloop-folder/mloop/scenarios/acc7f3460a414d1c9dccbee17573155b/predictions/15e9c6ffc1c54d8d8c9ec657f46deac8/00140_2.jpg"
+
+            //@"D:\data\MLoop\storage\scenarios\76de3a15eb78480ba0cfe4288079fae0\models\m20241219073828\Model", // model-path
+            //@"D:\data\MLoop\storage\scenarios\76de3a15eb78480ba0cfe4288079fae0\predictions\2224a7f30551496fb9f125d0b3090760\input.tsv", // input-path
+            //"--has-header", "true"
             //"--output-path", @"D:\data\ML-Research\OCR_01\test_output"
         ];
 #endif
@@ -51,6 +55,16 @@ public static partial class Program
         {
             var modelDir = opts.ModelPath;
             var inputPath = opts.InputPath;
+
+            var isDirectory = Directory.Exists(inputPath);
+            var isFile = File.Exists(inputPath);
+
+            if (!isDirectory && !isFile)
+            {
+                Console.WriteLine($"Error: Input path '{inputPath}' does not exist or is not accessible.");
+                return 1;
+            }
+
             string outputFile;
 
             // Determine output file path
@@ -58,10 +72,7 @@ public static partial class Program
             {
                 if (Path.HasExtension(opts.OutputPath))
                 {
-                    // If output path has extension, use it as is
                     outputFile = opts.OutputPath;
-
-                    // Ensure output directory exists
                     var outputDir = Path.GetDirectoryName(outputFile);
                     if (!string.IsNullOrEmpty(outputDir))
                     {
@@ -70,16 +81,21 @@ public static partial class Program
                 }
                 else
                 {
-                    // If output path is a directory, create default filename
                     Directory.CreateDirectory(opts.OutputPath);
                     outputFile = Path.Combine(opts.OutputPath, $"{Path.GetFileNameWithoutExtension(inputPath)}-predicted.csv");
                 }
             }
             else
             {
-                // If no output path specified, use input directory
-                var outputDir = Directory.Exists(inputPath) ? inputPath : Path.GetDirectoryName(inputPath)!;
-                outputFile = Path.Combine(outputDir, $"{Path.GetFileNameWithoutExtension(inputPath)}-predicted.csv");
+                if (isDirectory)
+                {
+                    outputFile = Path.Combine(inputPath, "predicted.csv");
+                }
+                else
+                {
+                    var outputDir = Directory.Exists(inputPath) ? inputPath : Path.GetDirectoryName(inputPath)!;
+                    outputFile = Path.Combine(outputDir, $"{Path.GetFileNameWithoutExtension(inputPath)}-predicted.csv");
+                }
             }
 
             Console.WriteLine($"Processing input file: {inputPath}");
@@ -95,40 +111,40 @@ public static partial class Program
             Console.WriteLine($"Output will be saved to: {outputFile}");
 
             // Execute prediction based on scenario
-            switch (configInfo.Scenario.ToLowerInvariant())
+            switch (configInfo.Scenario)
             {
                 case "classification":
-                    var classResult = ClassificationHandler.Predict(assembly, inputPath, className: "Model", hasHeader, delimiter);
+                    var classResult = ClassificationHandler.Predict(assembly, inputPath, className: configInfo.ClassName, hasHeader, delimiter);
                     ClassificationHandler.SaveResults(classResult, outputFile);
                     break;
 
                 case "forecasting":
-                    var forecastResult = ForecastingHandler.Predict(assembly, inputPath, className: "Model", hasHeader, delimiter);
+                    var forecastResult = ForecastingHandler.Predict(assembly, inputPath, className: configInfo.ClassName, hasHeader, delimiter);
                     ForecastingHandler.SaveResults(forecastResult, outputFile);
                     break;
 
                 case "regression":
-                    var regResult = RegressionHandler.Predict(assembly, inputPath, className: "Model", hasHeader, delimiter);
+                    var regResult = RegressionHandler.Predict(assembly, inputPath, className: configInfo.ClassName, hasHeader, delimiter);
                     RegressionHandler.SaveResults(regResult, outputFile);
                     break;
 
                 case "recommendation":
-                    var recResult = RecommendationHandler.Predict(assembly, inputPath, className: "Model", hasHeader, delimiter);
+                    var recResult = RecommendationHandler.Predict(assembly, inputPath, className: configInfo.ClassName, hasHeader, delimiter);
                     RecommendationHandler.SaveResults(recResult, outputFile);
                     break;
 
-                case "textclassification":
-                    var textResult = TextClassificationHandler.Predict(assembly, inputPath, className: "Model", hasHeader, delimiter);
+                case "text-classification":
+                    var textResult = TextClassificationHandler.Predict(assembly, inputPath, className: configInfo.ClassName, hasHeader, delimiter);
                     TextClassificationHandler.SaveResults(textResult, outputFile);
                     break;
 
-                case "imageclassification":
-                    var imageResult = ImageClassificationHandler.Predict(assembly, inputPath, className: "Model");
+                case "image-classification":
+                    var imageResult = ImageClassificationHandler.Predict(assembly, inputPath, className: configInfo.ClassName);
                     ImageClassificationHandler.SaveResults(imageResult, outputFile);
                     break;
 
-                case "objectdetection":
-                    var objResult = ObjectDetectionHandler.Predict(assembly, inputPath, className: "Model");
+                case "object-detection":
+                    var objResult = ObjectDetectionHandler.Predict(assembly, inputPath, className: configInfo.ClassName);
                     ObjectDetectionHandler.SaveResults(objResult, outputFile);
                     break;
 
