@@ -1,63 +1,35 @@
 ﻿using System.Reflection;
-using System.Globalization;
 
 namespace MLNetPredict.MLHandlers;
 
-public class RecommendationPredictionResult((object input, object output)[] items)
+/// <summary>
+/// Handler for recommendation model predictions
+/// </summary>
+public class RecommendationHandler : BaseMLHandler<RecommendationPredictionResult>
 {
-    public (object Input, object Output)[] Items { get; set; } = items;
-}
-
-public static class RecommendationHandler
-{
-    public static RecommendationPredictionResult Predict(Assembly assembly, string inputPath, string className, bool hasHeader, string delimiter)
+    /// <summary>
+    /// Perform recommendation predictions on input data using model
+    /// </summary>
+    public override RecommendationPredictionResult Predict(
+        Assembly assembly,
+        string inputPath,
+        string className,
+        bool hasHeader = false,
+        string delimiter = ",")
     {
-        var targetType = assembly.GetTypes().FirstOrDefault(t => t.Name == className)
-            ?? throw new InvalidOperationException($"{className} class not found.");
-
-        var modelInputType = targetType.GetNestedType("ModelInput")
-            ?? throw new InvalidOperationException($"{"ModelInput"} class not found.");
-
-        var predictMethod = targetType.GetMethod("Predict")
-            ?? throw new InvalidOperationException($"{"Predict"} method not found.");
+        // Get target class and method
+        var (targetType, modelInputType, predictMethod) =
+            GetModelComponents(assembly, className, "Predict");
 
         var propertyNames = modelInputType.GetProperties().Select(p => p.Name).ToArray();
 
         // Read input file
-        var lines = File.ReadAllLines(inputPath);
-        string[] headers;
-        IEnumerable<string> dataLines;
-        if (hasHeader)
-        {
-            headers = lines.First().Split(delimiter);
-            dataLines = lines.Skip(1);
-        }
-        else
-        {
-            headers = propertyNames;
-            dataLines = lines;
-        }
+        var (headers, dataLines) = ReadInputFile(inputPath, hasHeader, delimiter, propertyNames);
 
-        var inputs = new List<object>();
+        // Create model input objects
+        var inputs = CreateModelInputs(modelInputType, headers, dataLines, delimiter);
 
-        var lowerHeaders = headers.Select(h => Utils.SanitizeHeader(h.ToLower())).ToArray();
-        foreach (var line in dataLines)
-        {
-            var input = Activator.CreateInstance(modelInputType)!;
-            var values = line.Split(delimiter);
-            for (int i = 0; i < propertyNames.Length; i++)
-            {
-                var property = modelInputType.GetProperty(propertyNames[i])
-                    ?? throw new InvalidOperationException($"Property {propertyNames[i]} not found.");
-
-                var valueIndex = Array.IndexOf(lowerHeaders, propertyNames[i].ToLower());
-                var value = valueIndex >= 0 && valueIndex < values.Length ? values[valueIndex]
-                    : Utils.GetDefaultValue(property.PropertyType);
-                property.SetValue(input, Utils.ConvertValue($"{value}", property.PropertyType));
-            }
-            inputs.Add(input);
-        }
-
+        // Perform predictions
         var items = inputs.Select(input =>
         {
             var output = predictMethod.Invoke(null, [input])!;
@@ -67,8 +39,13 @@ public static class RecommendationHandler
         return new RecommendationPredictionResult(items);
     }
 
-    public static void SaveResults(RecommendationPredictionResult result, string outputPath)
+    /// <summary>
+    /// Save recommendation prediction results to file
+    /// </summary>
+    public override void SaveResults(RecommendationPredictionResult result, string outputPath)
     {
+        EnsureOutputDirectory(outputPath);
+
         using var writer = new StreamWriter(outputPath);
         writer.WriteLine("Score");
         Console.WriteLine("Score");
@@ -76,7 +53,6 @@ public static class RecommendationHandler
         foreach (var (_, output) in result.Items)
         {
             var score = output.GetType().GetProperty("Score")?.GetValue(output);
-
             var line = $"{Utils.FormatValue(score)}";
             writer.WriteLine(line);
             Console.WriteLine(line);

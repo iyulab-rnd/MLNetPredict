@@ -1,9 +1,7 @@
 # MLNetPredict
-
 MLNetPredict is a command-line tool for making predictions using trained ML.NET models. It supports various machine learning scenarios and provides a simple interface for batch predictions.
 
 ## Features
-
 - Supports multiple ML.NET scenarios:
   - Classification (binary and multi-class)
   - Regression
@@ -16,35 +14,31 @@ MLNetPredict is a command-line tool for making predictions using trained ML.NET 
 - Flexible input/output options
 - Support for different data formats (CSV, TSV)
 - Header detection and delimiter customization
+- Verbose mode for detailed logging and troubleshooting
 
 ## Installation
-
 To install MLNetPredict, you can use the .NET CLI:
-
 ```bash
 dotnet tool install --global mlnet-predict
 ```
 
 ## Usage
-
 Basic syntax:
 ```bash
 mlnet-predict <model-path> <input-path> [options]
 ```
 
 ### Required Arguments
-
 - `model-path`: Path to the directory containing the .mlnet model file
 - `input-path`: Path to the input file or directory (for image-based tasks)
 
 ### Options
-
 - `-o, --output-path`: Path to the output file or directory (optional)
 - `--has-header`: Specify if dataset file(s) have header row [true|false]
 - `--separator`: Specify the separator character used in the dataset file(s)
+- `-v, --verbose`: Enable verbose logging for debugging and troubleshooting
 
 ### Examples
-
 1. Basic Classification:
 ```bash
 mlnet-predict "models/sentiment" "data/input.csv" --has-header true
@@ -60,8 +54,12 @@ mlnet-predict "models/image_classifier" "images/test" -o "results/predictions.cs
 mlnet-predict "models/forecast" "data/timeseries.tsv" --separator "\t"
 ```
 
-## Input Data Format
+4. Running with Verbose Mode for Troubleshooting:
+```bash
+mlnet-predict "models/classifier" "data/test.csv" -v
+```
 
+## Input Data Format
 ### Text-based Tasks (Classification, Regression, etc.)
 - Supported formats: CSV, TSV
 - Files should contain the required features as columns
@@ -73,7 +71,6 @@ mlnet-predict "models/forecast" "data/timeseries.tsv" --separator "\t"
 - Output will be a CSV file with predictions for each image
 
 ## Output Format
-
 The output format varies depending on the machine learning task:
 
 ### Classification
@@ -97,19 +94,10 @@ PredictedValue,LowerBound,UpperBound
 
 ### Image Classification
 ```csv
-ImagePath,PredictedLabel
+ImagePath,PredictedLabel,Score
 ```
 
 ### Object Detection
 ```csv
 ImagePath,PredictedLabels,BoundingBoxes,Scores
 ```
-
-## Error Handling
-
-The tool provides detailed error messages for common issues:
-- Missing or invalid model files
-- Unsupported input formats
-- Invalid data format
-- Missing required columns
-- Model loading errors

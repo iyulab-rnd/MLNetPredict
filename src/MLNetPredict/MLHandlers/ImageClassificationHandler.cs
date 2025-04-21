@@ -1,89 +1,77 @@
 ﻿using System.Reflection;
-using Tensorflow;
 
 namespace MLNetPredict.MLHandlers;
 
-public class ImageClassificationPredictionResult
+/// <summary>
+/// Handler for image classification model predictions
+/// </summary>
+public class ImageClassificationHandler : BaseMLHandler<ImageClassificationPredictionResult>
 {
-    public (string ImagePath, string PredictedLabel, float Score)[] Items { get; set; }
+    private static readonly string[] SupportedFormats = [".jpg", ".jpeg", ".png", ".bmp", ".gif"];
 
-    public ImageClassificationPredictionResult((string imagePath, string predictedLabel, float score)[] items)
+    /// <summary>
+    /// Perform classification predictions on input images using model
+    /// </summary>
+    public override ImageClassificationPredictionResult Predict(
+        Assembly assembly,
+        string inputPath,
+        string className,
+        bool hasHeader = false,
+        string delimiter = ",")
     {
-        Items = items;
-    }
-}
+        // Get target class and method
+        var (targetType, modelInputType, predictMethod) =
+            GetModelComponents(assembly, className, "PredictAllLabels");
 
-
-public static class ImageClassificationHandler
-{
-    public static ImageClassificationPredictionResult Predict(Assembly assembly, string inputPath, string className)
-    {
-        var targetType = assembly.GetTypes().FirstOrDefault(t => t.Name == className)
-            ?? throw new InvalidOperationException($"{className} class not found.");
-
-        var modelInputType = targetType.GetNestedType("ModelInput")
-            ?? throw new InvalidOperationException($"ModelInput class not found.");
-
-        var predictAllLabelsMethod = targetType.GetMethod("PredictAllLabels")
-            ?? throw new InvalidOperationException($"PredictAllLabels method not found.");
-
-        // 'CreatePredictEngine' 메서드를 통해 PredictionEngine 인스턴스를 매번 새로 생성
+        // Create PredictionEngine instance using 'CreatePredictEngine' method
         var modelType = assembly.GetType("Model.ConsoleApp.Model")
             ?? throw new InvalidOperationException("Model type not found.");
 
-        var createPredictEngineMethod = modelType.GetMethod("CreatePredictEngine", BindingFlags.NonPublic | BindingFlags.Static)
+        var createPredictEngineMethod = modelType.GetMethod("CreatePredictEngine",
+            BindingFlags.NonPublic | BindingFlags.Static)
             ?? throw new InvalidOperationException("CreatePredictEngine method not found.");
 
-        // 모델 경로 검증
+        // Validate model path
         var modelPathField = modelType.GetField("MLNetModelPath", BindingFlags.Static | BindingFlags.NonPublic);
         var modelPath = modelPathField?.GetValue(null) as string;
         Console.WriteLine($"[DEBUG] Model path: {modelPath}");
+
         if (string.IsNullOrEmpty(modelPath) || !File.Exists(modelPath))
         {
-            throw new FileNotFoundException($"Model file not found at {modelPath}");
+            throw new FileNotFoundException($"Model file not found at path: {modelPath}");
         }
 
-        var supportedFormats = new[] { ".jpg", ".jpeg", ".png", ".bmp", ".gif" };
-        var imageFiles = new List<string>();
-        if (File.Exists(inputPath))
-        {
-            var ext = Path.GetExtension(inputPath).ToLower();
-            if (supportedFormats.Contains(ext))
-                imageFiles.Add(inputPath);
-        }
-        else if (Directory.Exists(inputPath))
-        {
-            imageFiles.AddRange(supportedFormats.SelectMany(fmt => Directory.GetFiles(inputPath, "*" + fmt, SearchOption.AllDirectories)));
-        }
-        else
-        {
-            throw new InvalidOperationException($"Input path not found: {inputPath}");
-        }
+        // Get list of input image files
+        var imageFiles = GetImageFiles(inputPath);
 
         if (imageFiles.Count == 0)
             throw new InvalidOperationException("No supported image files found.");
 
         var items = new List<(string, string, float)>();
 
+        // Perform prediction for each image
         foreach (var imagePath in imageFiles)
         {
             try
             {
                 Console.WriteLine($"Processing image: {imagePath}");
                 var imageBytes = File.ReadAllBytes(imagePath);
+
                 if (imageBytes == null || imageBytes.Length == 0)
                 {
-                    Console.WriteLine($"Warning: Image data is null or empty for {imagePath}");
+                    Console.WriteLine($"Warning: No or empty image data for {imagePath}.");
                     continue;
                 }
 
                 var inputInstance = Activator.CreateInstance(modelInputType)!;
                 var imageProp = modelInputType.GetProperty("ImageSource")
-                    ?? throw new InvalidOperationException("Property ImageSource not found.");
+                    ?? throw new InvalidOperationException("ImageSource property not found.");
+
                 imageProp.SetValue(inputInstance, imageBytes);
 
-                Console.WriteLine($"Invoking PredictAllLabels for image: {imagePath}");
-                var result = predictAllLabelsMethod.Invoke(null, new[] { inputInstance });
+                Console.WriteLine($"Calling PredictAllLabels for image {imagePath}");
+                var result = predictMethod.Invoke(null, new[] { inputInstance });
+
                 if (result is IOrderedEnumerable<KeyValuePair<string, float>> predictions)
                 {
                     var topPrediction = predictions.FirstOrDefault();
@@ -91,7 +79,7 @@ public static class ImageClassificationHandler
                 }
                 else
                 {
-                    Console.WriteLine($"Warning: Unexpected prediction result type for {imagePath}");
+                    Console.WriteLine($"Warning: Prediction result type for {imagePath} is not as expected.");
                 }
             }
             catch (Exception ex)
@@ -107,15 +95,17 @@ public static class ImageClassificationHandler
         }
 
         if (items.Count == 0)
-            throw new InvalidOperationException("No valid predictions were made");
+            throw new InvalidOperationException("No valid predictions performed.");
 
         return new ImageClassificationPredictionResult([.. items]);
     }
 
-    public static void SaveResults(ImageClassificationPredictionResult result, string outputPath)
+    /// <summary>
+    /// Save image classification prediction results to file
+    /// </summary>
+    public override void SaveResults(ImageClassificationPredictionResult result, string outputPath)
     {
-        var dir = Path.GetDirectoryName(outputPath);
-        if (Directory.Exists(dir) != true) Directory.CreateDirectory(dir!);
+        EnsureOutputDirectory(outputPath);
 
         using var writer = new StreamWriter(outputPath);
         writer.WriteLine("ImagePath,PredictedLabel,Score");
@@ -127,5 +117,31 @@ public static class ImageClassificationHandler
             writer.WriteLine(line);
             Console.WriteLine(line);
         }
+    }
+
+    /// <summary>
+    /// Get list of image files from input path
+    /// </summary>
+    private List<string> GetImageFiles(string inputPath)
+    {
+        var imageFiles = new List<string>();
+
+        if (File.Exists(inputPath))
+        {
+            var ext = Path.GetExtension(inputPath).ToLower();
+            if (SupportedFormats.Contains(ext))
+                imageFiles.Add(inputPath);
+        }
+        else if (Directory.Exists(inputPath))
+        {
+            imageFiles.AddRange(SupportedFormats.SelectMany(fmt =>
+                Directory.GetFiles(inputPath, "*" + fmt, SearchOption.AllDirectories)));
+        }
+        else
+        {
+            throw new InvalidOperationException($"Input path not found: {inputPath}");
+        }
+
+        return imageFiles;
     }
 }

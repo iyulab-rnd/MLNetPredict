@@ -2,61 +2,34 @@
 
 namespace MLNetPredict.MLHandlers;
 
-public class RegressionPredictionResult((object input, object output)[] items)
+/// <summary>
+/// 회귀 모델 예측을 처리하는 핸들러
+/// </summary>
+public class RegressionHandler : BaseMLHandler<RegressionPredictionResult>
 {
-    public (object Input, object output)[] Items { get; set; } = items;
-}
-
-public static class RegressionHandler
-{
-    public static RegressionPredictionResult Predict(Assembly assembly, string inputPath, string className, bool hasHeader, string delimiter)
+    /// <summary>
+    /// 모델을 사용하여 입력 데이터에 대한 회귀 예측 수행
+    /// </summary>
+    public override RegressionPredictionResult Predict(
+        Assembly assembly,
+        string inputPath,
+        string className,
+        bool hasHeader = false,
+        string delimiter = ",")
     {
-        var targetType = assembly.GetTypes().FirstOrDefault(t => t.Name == className)
-            ?? throw new InvalidOperationException($"{className} class not found.");
-
-        var modelInputType = targetType.GetNestedType("ModelInput")
-            ?? throw new InvalidOperationException($"{"ModelInput"} class not found.");
-
-        var predictMethod = targetType.GetMethod("Predict")
-            ?? throw new InvalidOperationException($"{"Predict"} method not found.");
+        // 대상 클래스 및 메서드 가져오기
+        var (targetType, modelInputType, predictMethod) =
+            GetModelComponents(assembly, className, "Predict");
 
         var propertyNames = modelInputType.GetProperties().Select(p => p.Name).ToArray();
 
-        // Read input file
-        var lines = File.ReadAllLines(inputPath);
-        string[] headers;
-        IEnumerable<string> dataLines;
-        if (hasHeader)
-        {
-            headers = lines.First().Split(delimiter);
-            dataLines = lines.Skip(1);
-        }
-        else
-        {
-            headers = propertyNames;
-            dataLines = lines;
-        }
+        // 입력 파일 읽기
+        var (headers, dataLines) = ReadInputFile(inputPath, hasHeader, delimiter, propertyNames);
 
-        var inputs = new List<object>();
+        // 모델 입력 객체 생성
+        var inputs = CreateModelInputs(modelInputType, headers, dataLines, delimiter);
 
-        var lowerHeaders = headers.Select(h => Utils.SanitizeHeader(h.ToLower())).ToArray();
-        foreach (var line in dataLines)
-        {
-            var input = Activator.CreateInstance(modelInputType)!;
-            var values = line.Split(delimiter);
-            for (int i = 0; i < propertyNames.Length; i++)
-            {
-                var property = modelInputType.GetProperty(propertyNames[i])
-                    ?? throw new InvalidOperationException($"Property {propertyNames[i]} not found.");
-
-                var valueIndex = Array.IndexOf(lowerHeaders, propertyNames[i].ToLower());
-                var value = valueIndex >= 0 && valueIndex < values.Length ? values[valueIndex]
-                    : Utils.GetDefaultValue(property.PropertyType);
-                property.SetValue(input, Utils.ConvertValue($"{value}", property.PropertyType));
-            }
-            inputs.Add(input);
-        }
-
+        // 예측 수행
         var items = inputs.Select(input =>
         {
             var output = predictMethod.Invoke(null, [input])!;
@@ -66,8 +39,13 @@ public static class RegressionHandler
         return new RegressionPredictionResult(items);
     }
 
-    public static void SaveResults(RegressionPredictionResult result, string outputPath)
+    /// <summary>
+    /// 회귀 예측 결과를 파일에 저장
+    /// </summary>
+    public override void SaveResults(RegressionPredictionResult result, string outputPath)
     {
+        EnsureOutputDirectory(outputPath);
+
         using var writer = new StreamWriter(outputPath);
         writer.WriteLine("Score");
         Console.WriteLine("Score");

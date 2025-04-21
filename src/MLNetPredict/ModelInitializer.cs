@@ -1,7 +1,5 @@
-﻿using System.Text.RegularExpressions;
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using NuGet.Configuration;
 using NuGet.Packaging;
 using NuGet.Protocol.Core.Types;
 using NuGet.Versioning;
@@ -16,47 +14,197 @@ public partial class ModelInitializer
 {
     private static readonly Dictionary<string, (Assembly Assembly, ConfigInfo Config)> ModelCache = [];
 
+    // Overload for backward compatibility
     public static (Assembly Assembly, ConfigInfo Config) Initialize(string modelDir)
+    {
+        return Initialize(modelDir, false);
+    }
+
+    public static (Assembly Assembly, ConfigInfo Config) Initialize(string modelDir, bool verbose)
     {
         // 1. Quick validation
         if (!Directory.Exists(modelDir))
             throw new DirectoryNotFoundException($"Model directory '{modelDir}' does not exist.");
 
+        if (verbose)
+        {
+            Console.WriteLine($"[DEBUG] Model directory found: {modelDir}");
+        }
+
         // 2. Check cache
         var modelKey = Path.GetFullPath(modelDir);
         if (ModelCache.TryGetValue(modelKey, out var cached))
         {
+            if (verbose)
+            {
+                Console.WriteLine("[DEBUG] Returning model from cache");
+            }
             return cached;
         }
 
         // 3. Load essential files
-        var files = new Dictionary<string, string>
+        var files = new Dictionary<string, string>();
+
+        if (verbose)
         {
-            ["model"] = Directory.GetFiles(modelDir, "*.mlnet").FirstOrDefault() ??
-                throw new FileNotFoundException("No .mlnet model file found."),
-            ["consumption"] = Directory.GetFiles(modelDir, "*.consumption.cs").FirstOrDefault() ??
-                throw new FileNotFoundException("No .consumption.cs file found."),
-            ["config"] = Directory.GetFiles(modelDir, "*.mbconfig").FirstOrDefault() ??
-                throw new FileNotFoundException("No .mbconfig file found.")
-        };
+            var modelFiles = Directory.GetFiles(modelDir, "*.mlnet");
+            Console.WriteLine($"[DEBUG] Found {modelFiles.Length} .mlnet files:");
+            foreach (var file in modelFiles)
+            {
+                Console.WriteLine($"[DEBUG]   - {Path.GetFileName(file)}");
+            }
+
+            var consumptionFiles = Directory.GetFiles(modelDir, "*.consumption.cs");
+            Console.WriteLine($"[DEBUG] Found {consumptionFiles.Length} .consumption.cs files:");
+            foreach (var file in consumptionFiles)
+            {
+                Console.WriteLine($"[DEBUG]   - {Path.GetFileName(file)}");
+            }
+
+            var configFiles = Directory.GetFiles(modelDir, "*.mbconfig");
+            Console.WriteLine($"[DEBUG] Found {configFiles.Length} .mbconfig files:");
+            foreach (var file in configFiles)
+            {
+                Console.WriteLine($"[DEBUG]   - {Path.GetFileName(file)}");
+            }
+        }
+
+        files["model"] = Directory.GetFiles(modelDir, "*.mlnet").FirstOrDefault() ??
+            throw new FileNotFoundException("No .mlnet model file found.");
+        files["consumption"] = Directory.GetFiles(modelDir, "*.consumption.cs").FirstOrDefault() ??
+            throw new FileNotFoundException("No .consumption.cs file found.");
+        files["config"] = Directory.GetFiles(modelDir, "*.mbconfig").FirstOrDefault() ??
+            throw new FileNotFoundException("No .mbconfig file found.");
+
+        if (verbose)
+        {
+            Console.WriteLine($"[DEBUG] Selected model file: {Path.GetFileName(files["model"])}");
+            Console.WriteLine($"[DEBUG] Selected consumption file: {Path.GetFileName(files["consumption"])}");
+            Console.WriteLine($"[DEBUG] Selected config file: {Path.GetFileName(files["config"])}");
+        }
 
         // 4. Load config
-        var config = LoadMinimalConfig(files["config"]);
+        var config = LoadMinimalConfig(files["config"], verbose);
+
+        // Try to infer class name (based on file name)
+        var consumptionFileName = Path.GetFileNameWithoutExtension(files["consumption"]);
+        if (consumptionFileName.EndsWith(".consumption"))
+        {
+            var derivedClassName = consumptionFileName.Substring(0, consumptionFileName.Length - 12);
+            if (verbose)
+            {
+                Console.WriteLine($"[DEBUG] Derived class name from consumption file: {derivedClassName}");
+            }
+            config.ClassName = derivedClassName;
+        }
+
+        if (verbose)
+        {
+            Console.WriteLine($"[DEBUG] Config loaded. Scenario: {config.Scenario}, Class name: {config.ClassName}");
+        }
 
         // 5. Install packages if needed
         var csprojFile = Directory.GetFiles(modelDir, "*.csproj").FirstOrDefault();
         if (csprojFile != null)
         {
-            InstallRequiredPackages(csprojFile);
+            if (verbose)
+            {
+                Console.WriteLine($"[DEBUG] Found project file: {Path.GetFileName(csprojFile)}");
+            }
+            InstallRequiredPackages(csprojFile, verbose);
         }
 
         // 6. Compile
         var code = File.ReadAllText(files["consumption"]);
-        var assembly = CompileModelAssembly(code, modelDir);
 
-        // 7. Set model path
-        var className = GetClassName(code) ?? throw new InvalidOperationException("Could not determine model class name");
-        ModelHandler.SetModelPath(assembly, files["model"], className);
+        // Add debug output for class discovery
+        var detectedClassName = GetClassName(code, verbose);
+        if (verbose)
+        {
+            Console.WriteLine($"[DEBUG] Detected class name from consumption code: {detectedClassName ?? "NULL"}");
+        }
+
+        // Check for available classes
+        if (verbose)
+        {
+            var tree = CSharpSyntaxTree.ParseText(code);
+            var root = tree.GetRoot();
+            var allClasses = root.DescendantNodes().OfType<ClassDeclarationSyntax>().ToList();
+            Console.WriteLine($"[DEBUG] Found {allClasses.Count} classes in the consumption file:");
+            foreach (var cls in allClasses)
+            {
+                Console.WriteLine($"[DEBUG]   - Class: {cls.Identifier.Text}");
+
+                // List methods in each class
+                var methods = cls.DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();
+                Console.WriteLine($"[DEBUG]     Methods ({methods.Count}):");
+                foreach (var method in methods)
+                {
+                    Console.WriteLine($"[DEBUG]       - {method.Identifier.Text}");
+                }
+            }
+        }
+
+        var assembly = CompileModelAssembly(code, modelDir);
+        if (verbose)
+        {
+            Console.WriteLine("[DEBUG] Assembly compiled successfully");
+
+            // Debug output for types in the assembly
+            var types = assembly.GetTypes();
+            Console.WriteLine($"[DEBUG] Found {types.Length} types in compiled assembly:");
+            foreach (var type in types)
+            {
+                Console.WriteLine($"[DEBUG]   - {type.FullName}");
+            }
+        }
+
+        // 7. Set model path using either detected class name or config class name
+        var className = detectedClassName ?? config.ClassName ?? throw new InvalidOperationException("Could not determine model class name");
+        if (verbose)
+        {
+            Console.WriteLine($"[DEBUG] Using class name: {className}");
+        }
+
+        try
+        {
+            ModelHandler.SetModelPath(assembly, files["model"], className);
+            if (verbose)
+            {
+                Console.WriteLine($"[DEBUG] Successfully set model path for class {className}");
+            }
+        }
+        catch (Exception ex)
+        {
+            if (verbose)
+            {
+                Console.WriteLine($"[DEBUG] Error setting model path: {ex.Message}");
+                // Try to find alternative class in assembly if class not found
+                Console.WriteLine("[DEBUG] Trying to find alternative class in assembly...");
+            }
+
+            var alternativeClass = FindAlternativeModelClass(assembly, Path.GetFileName(modelDir));
+            if (alternativeClass != null)
+            {
+                if (verbose)
+                {
+                    Console.WriteLine($"[DEBUG] Found alternative class: {alternativeClass}");
+                }
+                className = alternativeClass;
+                config.ClassName = alternativeClass;
+
+                // Set model path again with new class
+                ModelHandler.SetModelPath(assembly, files["model"], className);
+                if (verbose)
+                {
+                    Console.WriteLine($"[DEBUG] Successfully set model path for alternative class {className}");
+                }
+            }
+            else
+            {
+                throw; // Rethrow original exception if no alternative found
+            }
+        }
 
         // 8. Cache and return
         var result = (assembly, config);
@@ -64,7 +212,41 @@ public partial class ModelInitializer
         return result;
     }
 
-    private static ConfigInfo LoadMinimalConfig(string configPath)
+    // Find appropriate alternative model class in assembly
+    private static string? FindAlternativeModelClass(Assembly assembly, string folderName)
+    {
+        var types = assembly.GetTypes().Where(t => t.IsClass && !t.IsNested).ToArray();
+
+        // 1. Find class matching folder name
+        var folderMatch = types.FirstOrDefault(t => t.Name.Equals(folderName, StringComparison.OrdinalIgnoreCase));
+        if (folderMatch != null)
+        {
+            return folderMatch.Name;
+        }
+
+        // 2. Find class with Predict or PredictAllLabels method
+        var predictionClass = types.FirstOrDefault(t =>
+            t.GetMethods().Any(m => m.Name == "Predict" || m.Name == "PredictAllLabels"));
+
+        if (predictionClass != null)
+        {
+            return predictionClass.Name;
+        }
+
+        // 3. Find class that's not ModelInput or ModelOutput
+        var nonModelIOClass = types.FirstOrDefault(t =>
+            t.Name != "ModelInput" && t.Name != "ModelOutput");
+
+        if (nonModelIOClass != null)
+        {
+            return nonModelIOClass.Name;
+        }
+
+        // All attempts failed
+        return null;
+    }
+
+    private static ConfigInfo LoadMinimalConfig(string configPath, bool verbose)
     {
         var configContent = File.ReadAllText(configPath);
         var jsonConfig = System.Text.Json.JsonDocument.Parse(configContent);
@@ -143,7 +325,7 @@ public partial class ModelInitializer
                 break;
         }
 
-        return new ConfigInfo(hasHeader, delimiter, columns, labelColumn, scenario);
+        return new ConfigInfo(hasHeader, delimiter, columns, labelColumn, scenario, verbose);
     }
 
     private static string NormalizeScenario(string scenario)
@@ -161,22 +343,115 @@ public partial class ModelInitializer
         };
     }
 
-    private static string? GetClassName(string code)
+    private static string? GetClassName(string code, bool verbose)
     {
-        var tree = CSharpSyntaxTree.ParseText(code);
-        var root = tree.GetRoot();
-        var classDeclaration = root
-            .DescendantNodes()
-            .OfType<ClassDeclarationSyntax>()
-            .FirstOrDefault();
+        try
+        {
+            if (string.IsNullOrEmpty(code))
+            {
+                if (verbose) Console.WriteLine("[DEBUG] GetClassName: Input code is empty.");
+                return null;
+            }
 
-        return classDeclaration?.Identifier.Text;
+            var tree = CSharpSyntaxTree.ParseText(code);
+            var root = tree.GetRoot();
+
+            // 1. Find class with Predict or PredictAllLabels method
+            if (verbose) Console.WriteLine("[DEBUG] GetClassName: Searching for class with Predict or PredictAllLabels method");
+            var classWithPredictMethod = root
+                .DescendantNodes()
+                .OfType<ClassDeclarationSyntax>()
+                .FirstOrDefault(c => c.DescendantNodes()
+                    .OfType<MethodDeclarationSyntax>()
+                    .Any(m => m.Identifier.Text == "Predict" || m.Identifier.Text == "PredictAllLabels"));
+
+            if (classWithPredictMethod != null)
+            {
+                if (verbose) Console.WriteLine($"[DEBUG] GetClassName: Found class with Predict method: {classWithPredictMethod.Identifier.Text}");
+                return classWithPredictMethod.Identifier.Text;
+            }
+
+            // 2. Try to extract file name pattern
+            var fileNamePattern = @"//\s+([A-Za-z0-9_]+)\.consumption\.cs";
+            var fileNameMatch = System.Text.RegularExpressions.Regex.Match(code, fileNamePattern);
+            if (fileNameMatch.Success)
+            {
+                var fileBasedClassName = fileNameMatch.Groups[1].Value;
+                if (verbose) Console.WriteLine($"[DEBUG] GetClassName: Extracted class name from file comment: {fileBasedClassName}");
+
+                // Check if a class with this name actually exists
+                var matchingClass = root
+                    .DescendantNodes()
+                    .OfType<ClassDeclarationSyntax>()
+                    .FirstOrDefault(c => c.Identifier.Text.Equals(fileBasedClassName, StringComparison.OrdinalIgnoreCase));
+
+                if (matchingClass != null)
+                {
+                    if (verbose) Console.WriteLine($"[DEBUG] GetClassName: Confirmed file-based class: {matchingClass.Identifier.Text}");
+                    return matchingClass.Identifier.Text;
+                }
+            }
+
+            // 3. Try to infer class name from namespace
+            var namespacePattern = @"namespace\s+([A-Za-z0-9_.]+)";
+            var namespaceMatch = System.Text.RegularExpressions.Regex.Match(code, namespacePattern);
+            if (namespaceMatch.Success)
+            {
+                var namespaceParts = namespaceMatch.Groups[1].Value.Split('.');
+                var lastPart = namespaceParts.Last();
+                if (verbose) Console.WriteLine($"[DEBUG] GetClassName: Last part of namespace: {lastPart}");
+
+                // Find class matching the last part of namespace
+                var namespaceBasedClass = root
+                    .DescendantNodes()
+                    .OfType<ClassDeclarationSyntax>()
+                    .FirstOrDefault(c => c.Identifier.Text.Equals(lastPart, StringComparison.OrdinalIgnoreCase));
+
+                if (namespaceBasedClass != null)
+                {
+                    if (verbose) Console.WriteLine($"[DEBUG] GetClassName: Found namespace-based class: {namespaceBasedClass.Identifier.Text}");
+                    return namespaceBasedClass.Identifier.Text;
+                }
+            }
+
+            // 4. Find top-level class that's not ModelInput or ModelOutput
+            var mainClass = root
+                .DescendantNodes()
+                .OfType<ClassDeclarationSyntax>()
+                .FirstOrDefault(c => c.Identifier.Text != "ModelInput" && c.Identifier.Text != "ModelOutput");
+
+            if (mainClass != null)
+            {
+                if (verbose) Console.WriteLine($"[DEBUG] GetClassName: Found main class: {mainClass.Identifier.Text}");
+                return mainClass.Identifier.Text;
+            }
+
+            // 5. As a last resort, use first class
+            var firstClass = root
+                .DescendantNodes()
+                .OfType<ClassDeclarationSyntax>()
+                .FirstOrDefault();
+
+            if (firstClass != null)
+            {
+                if (verbose) Console.WriteLine($"[DEBUG] GetClassName: Using first class as fallback: {firstClass.Identifier.Text}");
+                return firstClass.Identifier.Text;
+            }
+
+            if (verbose) Console.WriteLine("[DEBUG] GetClassName: Could not find any class in code");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            if (verbose) Console.WriteLine($"[DEBUG] GetClassName: Error parsing code: {ex.Message}");
+            return null;
+        }
     }
 
     private static readonly HashSet<string> InstalledPackages = [];
     private static readonly string PackagesPath = Path.Combine(Path.GetTempPath(), "nuget-packages");
 
-    private static void InstallRequiredPackages(string projFile)
+    private static void InstallRequiredPackages(string projFile, bool verbose)
     {
         if (!File.Exists(projFile))
             return;
@@ -244,7 +519,7 @@ public partial class ModelInitializer
                         }
                     }
 
-                    // 특별 처리: SciSharp.TensorFlow.Redist
+                    // Special handling: SciSharp.TensorFlow.Redist
                     if (packageId.Equals("SciSharp.TensorFlow.Redist", StringComparison.OrdinalIgnoreCase))
                     {
                         string nativeOutputDir = Path.Combine(AppContext.BaseDirectory, "tensorflow_native");
@@ -312,7 +587,7 @@ public partial class ModelInitializer
         var syntaxTree = CSharpSyntaxTree.ParseText(code);
         var references = new HashSet<MetadataReference>();
 
-        // 1. 기본 프레임워크 참조 추가
+        // 1. Add basic framework references
         var trustedAssembliesPaths = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")).Split(Path.PathSeparator);
         var neededAssemblies = new[]
         {
@@ -347,22 +622,22 @@ public partial class ModelInitializer
             }
         }
 
-        // 2. 모델 디렉토리의 csproj 파일에서 패키지 참조 추가
+        // 2. Add package references from csproj file in model directory
         var csprojFile = Directory.GetFiles(modelDir, "*.csproj").FirstOrDefault();
         if (csprojFile != null)
         {
             var packageRefs = GetPackageReferences(csprojFile);
             foreach (var (id, version) in packageRefs)
             {
-                // 패키지별 어셈블리 찾기
+                // Find assemblies for each package
                 var packageDir = Path.Combine(PackagesPath, $"{id}.{version}");
                 if (Directory.Exists(packageDir))
                 {
-                    // lib 폴더에서 적절한 프레임워크 버전의 dll 찾기
+                    // Find dll in lib folder for appropriate framework version
                     var dllFiles = Directory.GetFiles(packageDir, "*.dll", SearchOption.AllDirectories);
                     foreach (var dll in dllFiles)
                     {
-                        // Native dll 제외
+                        // Exclude native dlls
                         if (!dll.Contains("native", StringComparison.OrdinalIgnoreCase) &&
                             !Path.GetFileName(dll).EndsWith("Native.dll", StringComparison.OrdinalIgnoreCase))
                         {
@@ -380,7 +655,7 @@ public partial class ModelInitializer
             }
         }
 
-        // 3. 실행 중인 어셈블리의 위치에서 추가 참조 로드
+        // 3. Load additional references from running assembly location
         var baseDir = AppContext.BaseDirectory;
         var localDlls = Directory.GetFiles(baseDir, "*.dll");
         foreach (var dll in localDlls)
@@ -395,7 +670,7 @@ public partial class ModelInitializer
             }
         }
 
-        // 4. 컴파일 옵션 설정 및 실행
+        // 4. Set compilation options and execute
         var compilation = CSharpCompilation.Create(
             "ModelAssembly_" + Guid.NewGuid().ToString("N"),
             [syntaxTree],

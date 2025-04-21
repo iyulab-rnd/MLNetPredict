@@ -1,19 +1,4 @@
-﻿using System.Reflection;
-using System.Text.Json.Nodes;
-using System.Text.RegularExpressions;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.ML.Data;
-using Microsoft.ML.TorchSharp.AutoFormerV2;
-using Newtonsoft.Json.Linq;
-using NuGet.Configuration;
-using NuGet.Packaging;
-using NuGet.Packaging.Core;
-using NuGet.Packaging.Signing;
-using NuGet.Protocol;
-using NuGet.Protocol.Core.Types;
-using NuGet.Versioning;
+﻿using System.Text.RegularExpressions;
 
 namespace MLNetPredict;
 

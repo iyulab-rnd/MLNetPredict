@@ -2,70 +2,43 @@
 
 namespace MLNetPredict.MLHandlers;
 
-public class ClassificationPredictionResult(string[] headers, string[] classes, (object input, IOrderedEnumerable<KeyValuePair<string, float>> predictions)[] items)
+/// <summary>
+/// Handler for classification model predictions
+/// </summary>
+public class ClassificationHandler : BaseMLHandler<ClassificationPredictionResult>
 {
-    public string[] Headers { get; set; } = headers;
-    public string[] Classes { get; set; } = classes;
-    public (object Input, IOrderedEnumerable<KeyValuePair<string, float>> Predictions)[] Items { get; set; } = items;
-}
-public static class ClassificationHandler
-{
-    public static ClassificationPredictionResult Predict(Assembly assembly, string inputPath, string className, bool hasHeader, string delimiter)
+    /// <summary>
+    /// Perform classification predictions on input data using model
+    /// </summary>
+    public override ClassificationPredictionResult Predict(
+        Assembly assembly,
+        string inputPath,
+        string className,
+        bool hasHeader = false,
+        string delimiter = ",")
     {
-        var targetType = assembly.GetTypes().FirstOrDefault(t => t.Name == className)
-            ?? throw new InvalidOperationException($"{className} class not found.");
-
-        var modelInputType = targetType.GetNestedType("ModelInput")
-            ?? throw new InvalidOperationException($"{"ModelInput"} class not found.");
-
-        var predictAllLabelsMethod = targetType.GetMethod("PredictAllLabels")
-            ?? throw new InvalidOperationException($"{"PredictAllLabels"} method not found.");
+        // Get target class and method
+        var (targetType, modelInputType, predictMethod) =
+            GetModelComponents(assembly, className, "PredictAllLabels");
 
         var propertyNames = modelInputType.GetProperties().Select(p => p.Name).ToArray();
 
         // Read input file
-        var lines = File.ReadAllLines(inputPath);
-        string[] headers;
-        IEnumerable<string> dataLines;
-        if (hasHeader)
-        {
-            headers = lines.First().Split(delimiter);
-            dataLines = lines.Skip(1);
-        }
-        else
-        {
-            headers = propertyNames;
-            dataLines = lines;
-        }
+        var (headers, dataLines) = ReadInputFile(inputPath, hasHeader, delimiter, propertyNames);
 
-        var inputs = new List<object>();
+        // Create model input objects
+        var inputs = CreateModelInputs(modelInputType, headers, dataLines, delimiter);
 
-        var lowerHeaders = headers.Select(h => Utils.SanitizeHeader(h.ToLower())).ToArray();
-        foreach (var line in dataLines)
-        {
-            var input = Activator.CreateInstance(modelInputType)!;
-            var values = line.Split(delimiter);
-            for (int i = 0; i < propertyNames.Length; i++)
-            {
-                var property = modelInputType.GetProperty(propertyNames[i])
-                    ?? throw new InvalidOperationException($"Property {propertyNames[i]} not found.");
-
-                var valueIndex = Array.IndexOf(lowerHeaders, propertyNames[i].ToLower());
-                var value = valueIndex >= 0 && valueIndex < values.Length ? values[valueIndex]
-                    : Utils.GetDefaultValue(property.PropertyType);
-                property.SetValue(input, Utils.ConvertValue($"{value}", property.PropertyType));
-            }
-            inputs.Add(input);
-        }
-
+        // Perform predictions
         var items = inputs.Select(input =>
         {
-            var result = (IOrderedEnumerable<KeyValuePair<string, float>>)predictAllLabelsMethod.Invoke(null, [input])!;
+            var result = (IOrderedEnumerable<KeyValuePair<string, float>>)predictMethod.Invoke(null, [input])!;
             return (input, result);
         }).ToArray();
 
+        // Extract class list
         var classes = new List<string>();
-        foreach (var (input, result) in items)
+        foreach (var (_, result) in items)
         {
             foreach (var prediction in result)
             {
@@ -79,8 +52,13 @@ public static class ClassificationHandler
         return new ClassificationPredictionResult(headers, [.. classes], items);
     }
 
-    public static void SaveResults(ClassificationPredictionResult result, string outputPath)
+    /// <summary>
+    /// Save classification prediction results to file
+    /// </summary>
+    public override void SaveResults(ClassificationPredictionResult result, string outputPath)
     {
+        EnsureOutputDirectory(outputPath);
+
         using var writer = new StreamWriter(outputPath);
 
         if (result.Classes.Length == 2)
