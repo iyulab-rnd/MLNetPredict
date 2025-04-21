@@ -5,10 +5,9 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MLNetPredict", "MLNetPredict\MLNetPredict.csproj", "{A42798B8-7345-4A7F-A704-62CC2BBD519E}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MLNetPredict.Tests", "MLNetPredict.Tests\MLNetPredict.Tests.csproj", "{C47DB318-72C6-434F-A71A-ECC1736505BE}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{0C9A37F0-5A79-4228-BBA1-A576EE40C941}"
 	ProjectSection(SolutionItems) = preProject
+		..\.github\workflows\dotnet.yml = ..\.github\workflows\dotnet.yml
 		..\README.md = ..\README.md
 	EndProjectSection
 EndProject
@@ -16,6 +15,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 	ProjectSection(SolutionItems) = preProject
 		Directory.Build.props = Directory.Build.props
 	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MLNetPredict.Tests", "MLNetPredict.Tests\MLNetPredict.Tests.csproj", "{7B3E117F-0B87-12C7-C7F6-1EA084917275}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -27,10 +28,10 @@ Global
 		{A42798B8-7345-4A7F-A704-62CC2BBD519E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A42798B8-7345-4A7F-A704-62CC2BBD519E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A42798B8-7345-4A7F-A704-62CC2BBD519E}.Release|Any CPU.Build.0 = Release|Any CPU
-		{C47DB318-72C6-434F-A71A-ECC1736505BE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{C47DB318-72C6-434F-A71A-ECC1736505BE}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{C47DB318-72C6-434F-A71A-ECC1736505BE}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{C47DB318-72C6-434F-A71A-ECC1736505BE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7B3E117F-0B87-12C7-C7F6-1EA084917275}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7B3E117F-0B87-12C7-C7F6-1EA084917275}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7B3E117F-0B87-12C7-C7F6-1EA084917275}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7B3E117F-0B87-12C7-C7F6-1EA084917275}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
